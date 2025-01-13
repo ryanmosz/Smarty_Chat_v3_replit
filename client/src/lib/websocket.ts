@@ -6,17 +6,20 @@ class ChatWebSocket {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000;
+  private isConnecting = false;
 
   connect() {
-    if (this.ws?.readyState === WebSocket.OPEN) {
+    if (this.ws?.readyState === WebSocket.OPEN || this.isConnecting) {
       return;
     }
 
+    this.isConnecting = true;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    this.ws = new WebSocket(`${protocol}//${window.location.host}`);
+    this.ws = new WebSocket(`${protocol}//${window.location.host}?type=chat`);
 
     this.ws.onopen = () => {
       console.log('WebSocket connected');
+      this.isConnecting = false;
       this.reconnectAttempts = 0;
       this.reconnectDelay = 1000;
     };
@@ -24,6 +27,7 @@ class ChatWebSocket {
     this.ws.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data);
+        console.log('Received WebSocket message:', message);
         this.messageHandlers.forEach(handler => handler(message));
       } catch (error) {
         console.error('Failed to parse WebSocket message:', error);
@@ -33,6 +37,7 @@ class ChatWebSocket {
     this.ws.onclose = () => {
       console.log('WebSocket disconnected');
       this.ws = null;
+      this.isConnecting = false;
 
       if (this.reconnectAttempts < this.maxReconnectAttempts) {
         setTimeout(() => {
@@ -59,6 +64,7 @@ class ChatWebSocket {
 
   send(message: WebSocketMessage) {
     if (this.ws?.readyState === WebSocket.OPEN) {
+      console.log('Sending WebSocket message:', message);
       this.ws.send(JSON.stringify(message));
     } else {
       console.warn('WebSocket not connected, message not sent:', message);
@@ -74,6 +80,7 @@ class ChatWebSocket {
     }
     this.messageHandlers = [];
     this.reconnectAttempts = this.maxReconnectAttempts; // Prevent auto-reconnect
+    this.isConnecting = false;
   }
 }
 

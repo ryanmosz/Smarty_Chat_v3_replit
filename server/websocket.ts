@@ -1,65 +1,64 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { Server } from 'http';
 import { db } from '@db';
-import { messages, channels } from '@db/schema';
-import { eq } from 'drizzle-orm';
+import { messages } from '@db/schema';
 import { parse as parseUrl } from 'url';
 
 type WebSocketMessage = {
-  type: 'message' | 'typing' | 'channel_created' | 'channel_deleted';
+  type: 'message' | 'typing' | 'channel_created' | 'channel_deleted' | 'reaction' | 'error';
   payload: any;
 };
 
 export function setupWebSocket(server: Server) {
   const wss = new WebSocketServer({ 
-    server,
-    verifyClient: (info, cb) => {
-      // Always allow Vite HMR WebSocket connections
-      const { query } = parseUrl(info.req.url || '', true);
-      if (info.req.headers['sec-websocket-protocol'] === 'vite-hmr' || query.type === 'vite-hmr') {
-        cb(true);
-        return;
-      }
-
-      // For chat connections, always allow for now since we removed auth
-      cb(true);
-    }
+    noServer: true // Important: Use noServer to handle upgrade manually
   });
 
   // Keep track of connected clients
   const clients = new Set<WebSocket>();
 
-  wss.on('connection', (ws: WebSocket, req) => {
-    // Skip handling for Vite HMR connections
-    const { query } = parseUrl(req.url || '', true);
-    if (req.headers['sec-websocket-protocol'] === 'vite-hmr' || query.type === 'vite-hmr') {
+  // Handle upgrade manually to properly differentiate between Vite HMR and chat WebSocket
+  server.on('upgrade', (request, socket, head) => {
+    const { pathname, query } = parseUrl(request.url || '', true);
+
+    // Allow Vite HMR WebSocket connections to pass through
+    if (request.headers['sec-websocket-protocol'] === 'vite-hmr' || query.type === 'vite-hmr') {
       return;
     }
 
+    // Handle chat WebSocket connections
+    if (query.type === 'chat') {
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit('connection', ws, request);
+      });
+    }
+  });
+
+  wss.on('connection', (ws: WebSocket, req) => {
     console.log('Chat WebSocket client connected');
     clients.add(ws);
 
     ws.on('message', async (data: string) => {
       try {
         const message: WebSocketMessage = JSON.parse(data);
-        console.log(`Received WebSocket message: ${message.type}`);
+        console.log(`Received WebSocket message:`, message);
 
         switch (message.type) {
           case 'message':
-            const { content, channelId } = message.payload;
-            const [newMessage] = await db.insert(messages)
-              .values({ content, channelId })
+            const { content, channelId, threadParentId } = message.payload;
+            const [newMessage] = await db
+              .insert(messages)
+              .values({ content, channelId, threadParentId })
               .returning();
 
             broadcast({ type: 'message', payload: newMessage });
             break;
 
           case 'typing':
-            const { channelId: typingChannelId } = message.payload;
-            broadcast({
-              type: 'typing',
-              payload: { channelId: typingChannelId }
-            });
+          case 'reaction':
+          case 'channel_created':
+          case 'channel_deleted':
+            broadcast(message);
             break;
         }
       } catch (error) {

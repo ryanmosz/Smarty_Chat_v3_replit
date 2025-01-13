@@ -1,10 +1,25 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import session from "express-session";
+import createMemoryStore from "memorystore";
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+const MemoryStore = createMemoryStore(session);
+const sessionMiddleware = session({
+  secret: process.env.REPL_ID || "chat-app",
+  resave: false,
+  saveUninitialized: false,
+  cookie: {},
+  store: new MemoryStore({
+    checkPeriod: 86400000, // prune expired entries every 24h
+  }),
+});
+
+app.use(sessionMiddleware);
 
 app.use((req, res, next) => {
   const start = Date.now();
