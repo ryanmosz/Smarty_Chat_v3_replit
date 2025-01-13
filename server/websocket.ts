@@ -3,9 +3,10 @@ import { Server } from 'http';
 import { db } from '@db';
 import { messages } from '@db/schema';
 import { parse as parseUrl } from 'url';
+import { eq } from 'drizzle-orm';
 
 type WebSocketMessage = {
-  type: 'message' | 'typing' | 'channel_created' | 'channel_deleted' | 'reaction' | 'error';
+  type: 'message' | 'typing' | 'channel_created' | 'channel_deleted' | 'message_deleted' | 'reaction' | 'error';
   payload: any;
 };
 
@@ -52,6 +53,16 @@ export function setupWebSocket(server: Server) {
               .returning();
 
             broadcast({ type: 'message', payload: newMessage });
+            break;
+
+          case 'message_deleted':
+            const { id } = message.payload;
+            await db
+              .delete(messages)
+              .where(eq(messages.id, id));
+
+            // Broadcast deletion to all clients
+            broadcast({ type: 'message_deleted', payload: { id } });
             break;
 
           case 'typing':
