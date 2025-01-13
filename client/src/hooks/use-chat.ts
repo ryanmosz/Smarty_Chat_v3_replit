@@ -41,6 +41,37 @@ export function useChat() {
       });
       return Promise.resolve();
     },
+    onMutate: async (newMessage) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ 
+        queryKey: [`/api/channels/${newMessage.channelId}/messages`] 
+      });
+
+      // Get the current messages
+      const previousMessages = queryClient.getQueryData<Message[]>(
+        [`/api/channels/${newMessage.channelId}/messages`]
+      ) || [];
+
+      // Create an optimistic message
+      const optimisticMessage: Message = {
+        id: Date.now(), // Temporary ID
+        content: newMessage.content,
+        channelId: newMessage.channelId,
+        threadParentId: newMessage.threadParentId,
+        userId: null, // Will be set by the server
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        isDeleted: false,
+      };
+
+      // Update the messages immediately
+      queryClient.setQueryData<Message[]>(
+        [`/api/channels/${newMessage.channelId}/messages`],
+        [...previousMessages, optimisticMessage]
+      );
+
+      return { previousMessages };
+    },
   });
 
   // Add Reaction
@@ -75,10 +106,20 @@ export function useChat() {
           queryClient.invalidateQueries({ queryKey: ['/api/channels'] });
           break;
         case 'message':
-          // Invalidate messages for the specific channel
-          queryClient.invalidateQueries({ 
-            queryKey: [`/api/channels/${message.payload.channelId}/messages`] 
-          });
+          // Update the messages for the specific channel
+          const channelId = message.payload.channelId;
+          const queryKey = [`/api/channels/${channelId}/messages`];
+
+          // Get current messages
+          const currentMessages = queryClient.getQueryData<Message[]>(queryKey) || [];
+
+          // Add new message if it doesn't exist
+          if (!currentMessages.some(m => m.id === message.payload.id)) {
+            queryClient.setQueryData<Message[]>(
+              queryKey,
+              [...currentMessages, message.payload]
+            );
+          }
           break;
       }
     });
