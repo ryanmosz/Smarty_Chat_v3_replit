@@ -1,9 +1,8 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { Server } from 'http';
 import { db } from '@db';
-import { messages, channels, reactions, directMessages } from '@db/schema';
+import { messages, channels, reactions } from '@db/schema';
 import { eq } from 'drizzle-orm';
-import type { User } from '@db/schema';
 
 type WebSocketClient = WebSocket & {
   userId?: number;
@@ -11,7 +10,7 @@ type WebSocketClient = WebSocket & {
 };
 
 type WebSocketMessage = {
-  type: 'message' | 'typing' | 'reaction' | 'delete_message';
+  type: 'message' | 'typing' | 'reaction' | 'delete_message' | 'channel_created' | 'channel_deleted';
   payload: any;
 };
 
@@ -19,13 +18,13 @@ export function setupWebSocket(server: Server) {
   const wss = new WebSocketServer({ 
     server,
     verifyClient: (info, cb) => {
-      // Allow Vite HMR WebSocket connections
+      // Always allow Vite HMR WebSocket connections
       if (info.req.headers['sec-websocket-protocol'] === 'vite-hmr') {
         cb(true);
         return;
       }
 
-      // Check if user is authenticated via session
+      // For chat connections, verify authentication
       const req = info.req as any;
       if (!req.session?.passport?.user) {
         cb(false, 401, 'Unauthorized');
@@ -59,6 +58,11 @@ export function setupWebSocket(server: Server) {
   });
 
   wss.on('connection', (ws: WebSocketClient, req: any) => {
+    // Skip session handling for Vite HMR connections
+    if (req.headers['sec-websocket-protocol'] === 'vite-hmr') {
+      return;
+    }
+
     ws.isAlive = true;
     ws.on('pong', heartbeat);
 
@@ -129,16 +133,48 @@ export function setupWebSocket(server: Server) {
       }
     });
 
+    ws.on('error', (error) => {
+      console.error('WebSocket error:', error);
+      clients.delete(ws);
+    });
+
     ws.on('close', () => {
       clients.delete(ws);
     });
   });
 
   function broadcast(message: WebSocketMessage) {
+    const deadClients: WebSocketClient[] = [];
+
     wss.clients.forEach((client: WebSocketClient) => {
       if (client.readyState === WebSocket.OPEN) {
-        client.send(JSON.stringify(message));
+        try {
+          client.send(JSON.stringify(message));
+        } catch (error) {
+          console.error('Broadcast error:', error);
+          deadClients.push(client);
+        }
+      } else {
+        deadClients.push(client);
+      }
+    });
+
+    // Clean up dead clients
+    deadClients.forEach(client => {
+      clients.delete(client);
+      try {
+        client.terminate();
+      } catch (error) {
+        console.error('Error terminating client:', error);
       }
     });
   }
+
+  return {
+    broadcast,
+    close: () => {
+      clearInterval(interval);
+      wss.close();
+    }
+  };
 }

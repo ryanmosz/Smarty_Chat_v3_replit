@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { chatWs } from '../lib/websocket';
 import type { Channel, Message, DirectMessage } from '@db/schema';
+import React from 'react';
 
 export function useChat() {
   const queryClient = useQueryClient();
@@ -63,6 +64,27 @@ export function useChat() {
       return Promise.resolve();
     },
   });
+
+  // Subscribe to WebSocket updates
+  React.useEffect(() => {
+    const unsubscribe = chatWs.subscribe((message) => {
+      switch (message.type) {
+        case 'channel_created':
+        case 'channel_deleted':
+          // Invalidate channels query to trigger a refetch
+          queryClient.invalidateQueries({ queryKey: ['/api/channels'] });
+          break;
+        case 'message':
+          // Invalidate messages for the specific channel
+          queryClient.invalidateQueries({ 
+            queryKey: [`/api/channels/${message.payload.channelId}/messages`] 
+          });
+          break;
+      }
+    });
+
+    return () => unsubscribe();
+  }, [queryClient]);
 
   return {
     channels,

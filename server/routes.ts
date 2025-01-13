@@ -4,9 +4,18 @@ import { setupAuth } from "./auth";
 import { db } from "@db";
 import { channels } from "@db/schema";
 import { eq, and } from "drizzle-orm";
+import { setupWebSocket } from "./websocket";
 
 export function registerRoutes(app: Express): Server {
+  // Create HTTP server first so WebSocket can use the same server instance
+  const httpServer = createServer(app);
+
+  // Setup authentication before WebSocket server
   setupAuth(app);
+
+  // Setup WebSocket server
+  const wss = setupWebSocket(httpServer);
+  app.set('wss', wss);
 
   // Basic channel routes
   app.get("/api/channels", async (_req, res) => {
@@ -29,6 +38,13 @@ export function registerRoutes(app: Express): Server {
       const [channel] = await db.insert(channels)
         .values({ name, description, createdById: req.user.id })
         .returning();
+
+      // Broadcast channel creation to all connected clients
+      wss.broadcast({
+        type: 'channel_created',
+        payload: channel
+      });
+
       res.json(channel);
     } catch (error) {
       console.error('Error creating channel:', error);
@@ -64,6 +80,12 @@ export function registerRoutes(app: Express): Server {
       await db.delete(channels)
         .where(eq(channels.id, channelId));
 
+      // Broadcast channel deletion to all connected clients
+      wss.broadcast({
+        type: 'channel_deleted',
+        payload: { id: channelId }
+      });
+
       res.json({ message: 'Channel deleted successfully' });
     } catch (error) {
       console.error('Error deleting channel:', error);
@@ -71,6 +93,11 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  const httpServer = createServer(app);
+  // Clean up WebSocket server on process exit
+  process.on('SIGTERM', () => {
+    wss.close();
+    httpServer.close();
+  });
+
   return httpServer;
 }
