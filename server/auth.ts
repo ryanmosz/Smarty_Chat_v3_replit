@@ -1,14 +1,12 @@
 import passport from "passport";
 import { IVerifyOptions, Strategy as LocalStrategy } from "passport-local";
 import { type Express } from "express";
-import session from "express-session";
-import createMemoryStore from "memorystore";
+import type { RequestHandler } from 'express';
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { users, insertUserSchema, type SelectUser } from "@db/schema";
 import { db } from "@db";
-import { eq, asc } from "drizzle-orm";
-import { colorAssignments } from "@db/schema";
+import { eq } from "drizzle-orm";
 
 const scryptAsync = promisify(scrypt);
 const crypto = {
@@ -29,56 +27,6 @@ const crypto = {
   },
 };
 
-const AVATAR_COLORS = [
-  "#FAE7EB", "#E0D4E7", "#DBEEF7", "#BDD2E4", "#EECEDA",
-  "#CCDCEB", "#FFF5ED", "#FAE0D8", "#F0F4BF", "#DFE1BE",
-  "#F1DEEE", "#C4B7BB", "#FAEDCB", "#C9E4DE", "#C6DEF1",
-  "#DBCDF0", "#F2C6DE", "#F7D9C4", "#FFADAD", "#FFD6A5",
-  "#FDFFB6", "#E4F1EE", "#D9EDF8", "#DEDAF4"
-];
-
-async function getNextColor(): Promise<string> {
-  const assignments = await db
-    .select()
-    .from(colorAssignments)
-    .orderBy(asc(colorAssignments.lastUsed))
-    .limit(1);
-
-  if (assignments.length > 0) {
-    const assignment = assignments[0];
-    await db
-      .update(colorAssignments)
-      .set({ lastUsed: new Date() })
-      .where(eq(colorAssignments.id, assignment.id));
-    return assignment.color;
-  }
-
-  // Initialize colors if none exist
-  for (const color of AVATAR_COLORS) {
-    await db.insert(colorAssignments).values({ 
-      color, 
-      lastUsed: new Date(0) // Initialize with epoch timestamp
-    });
-  }
-
-  const [firstColor] = await db
-    .select()
-    .from(colorAssignments)
-    .orderBy(asc(colorAssignments.lastUsed))
-    .limit(1);
-
-  if (!firstColor) {
-    throw new Error("Failed to initialize colors");
-  }
-
-  await db
-    .update(colorAssignments)
-    .set({ lastUsed: new Date() })
-    .where(eq(colorAssignments.id, firstColor.id));
-
-  return firstColor.color;
-}
-
 // extend express user object with our schema
 declare global {
   namespace Express {
@@ -86,26 +34,12 @@ declare global {
   }
 }
 
-export function setupAuth(app: Express) {
-  const MemoryStore = createMemoryStore(session);
-  const sessionSettings: session.SessionOptions = {
-    secret: process.env.REPL_ID || "porygon-supremacy",
-    resave: false,
-    saveUninitialized: false,
-    cookie: {},
-    store: new MemoryStore({
-      checkPeriod: 86400000, // prune expired entries every 24h
-    }),
-  };
-
+export function setupAuth(app: Express, sessionMiddleware: RequestHandler) {
   if (app.get("env") === "production") {
     app.set("trust proxy", 1);
-    sessionSettings.cookie = {
-      secure: true,
-    };
   }
 
-  app.use(session(sessionSettings));
+  app.use(sessionMiddleware);
   app.use(passport.initialize());
   app.use(passport.session());
 
@@ -171,14 +105,12 @@ export function setupAuth(app: Express) {
       }
 
       const hashedPassword = await crypto.hash(password);
-      const avatarColor = await getNextColor();
 
       const [newUser] = await db
         .insert(users)
         .values({
           username,
           password: hashedPassword,
-          avatarColor,
         })
         .returning();
 

@@ -1,18 +1,17 @@
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { X } from "lucide-react";
-import type { Message, User } from "@db/schema";
+import type { Message } from "@db/schema";
 import { MessageList } from "./message-list";
 import { MessageInput } from "./message-input";
 import { useChat } from "@/hooks/use-chat";
 
 interface ThreadPanelProps {
   parentMessage: Message;
-  users: User[];
   onClose: () => void;
 }
 
-export function ThreadPanel({ parentMessage, users, onClose }: ThreadPanelProps) {
+export function ThreadPanel({ parentMessage, onClose }: ThreadPanelProps) {
   const { getThreadMessages } = useChat();
   const { data: threadMessages = [] } = getThreadMessages(parentMessage.id);
 
@@ -29,8 +28,7 @@ export function ThreadPanel({ parentMessage, users, onClose }: ThreadPanelProps)
           <div className="font-medium">Original Message</div>
           <div className="mt-2">{parentMessage.content}</div>
         </div>
-        {/* Since parentMessage is already a Message type, channelId is guaranteed to exist */}
-        <MessageList messages={threadMessages} users={users} />
+        <MessageList messages={threadMessages} />
       </ScrollArea>
       <MessageInput 
         channelId={parentMessage.channelId!} 

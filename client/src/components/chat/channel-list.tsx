@@ -12,8 +12,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useState } from "react";
-import { useChat } from "@/hooks/use-chat";
-import { useUser } from "@/hooks/use-user";
 import type { Channel } from "@db/schema";
 
 interface ChannelListProps {
@@ -30,8 +28,6 @@ export function ChannelList({
   const [isOpen, setIsOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const { sendMessage } = useChat();
-  const { user } = useUser();
 
   const handleCreateChannel = async () => {
     try {
@@ -113,16 +109,14 @@ export function ChannelList({
                 <Hash className="h-4 w-4 mr-2" />
                 {channel.name}
               </Button>
-              {channel.createdById === user?.id && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                  onClick={() => handleDeleteChannel(channel.id)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                onClick={() => handleDeleteChannel(channel.id)}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
             </div>
           ))}
         </div>

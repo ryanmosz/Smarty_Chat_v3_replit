@@ -1,8 +1,5 @@
 import { useState } from "react";
 import { useChat } from "@/hooks/use-chat";
-import { useUser } from "@/hooks/use-user";
-import { UserHeader, LogoutButton } from "@/components/chat/user-header";
-import { SearchBar } from "@/components/chat/search-bar";
 import { ChannelList } from "@/components/chat/channel-list";
 import { MessageList } from "@/components/chat/message-list";
 import { MessageInput } from "@/components/chat/message-input";
@@ -13,11 +10,7 @@ export default function ChatPage() {
   const [selectedChannelId, setSelectedChannelId] = useState<number>();
   const [threadMessage, setThreadMessage] = useState<Message>();
   const { channels = [], getChannelMessages } = useChat();
-  const { user } = useUser();
-
   const { data: messages = [] } = getChannelMessages(selectedChannelId || 0);
-
-  if (!user) return null;
 
   return (
     <div className="h-screen flex">
@@ -32,17 +25,6 @@ export default function ChatPage() {
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col">
-        {/* Header - Only Above Main Chat */}
-        <div className="border-b bg-background">
-          <div className="flex items-center justify-between p-4">
-            <div className="flex items-center gap-4">
-              <UserHeader />
-              <SearchBar />
-            </div>
-            <LogoutButton />
-          </div>
-        </div>
-
         {/* Chat Area */}
         <div className="flex-1 flex">
           <div className="flex-1 flex flex-col">
@@ -50,7 +32,6 @@ export default function ChatPage() {
               <>
                 <MessageList
                   messages={messages}
-                  users={[user]} // TODO: Fetch all users
                   onThreadClick={setThreadMessage}
                 />
                 <MessageInput channelId={selectedChannelId} />
@@ -65,7 +46,6 @@ export default function ChatPage() {
           {threadMessage && (
             <ThreadPanel
               parentMessage={threadMessage}
-              users={[user]} // TODO: Fetch all users
               onClose={() => setThreadMessage(undefined)}
             />
           )}
