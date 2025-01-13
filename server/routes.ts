@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { db } from "@db";
-import { channels, messages } from "@db/schema";
+import { channels, messages, users } from "@db/schema";
 import { eq } from "drizzle-orm";
 import { setupWebSocket } from "./websocket";
 
@@ -21,6 +21,29 @@ export function registerRoutes(app: Express): Server {
     } catch (error) {
       console.error('Error fetching channels:', error);
       res.status(500).json({ message: 'Failed to fetch channels' });
+    }
+  });
+
+  // Channel messages route with user data
+  app.get("/api/channels/:channelId/messages", async (req, res) => {
+    try {
+      const channelId = parseInt(req.params.channelId);
+      if (isNaN(channelId)) {
+        return res.status(400).json({ message: 'Invalid channel ID' });
+      }
+
+      const channelMessages = await db.query.messages.findMany({
+        where: eq(messages.channelId, channelId),
+        with: {
+          user: true
+        },
+        orderBy: messages.createdAt,
+      });
+
+      res.json(channelMessages);
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+      res.status(500).json({ message: 'Failed to fetch messages' });
     }
   });
 

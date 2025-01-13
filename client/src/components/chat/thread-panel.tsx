@@ -1,10 +1,12 @@
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { X } from "lucide-react";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import type { Message } from "@db/schema";
 import { MessageList } from "./message-list";
 import { MessageInput } from "./message-input";
 import { useChat } from "@/hooks/use-chat";
+import { formatDistanceToNow } from "date-fns";
 
 interface ThreadPanelProps {
   parentMessage: Message;
@@ -25,8 +27,35 @@ export function ThreadPanel({ parentMessage, onClose }: ThreadPanelProps) {
       </div>
       <ScrollArea className="flex-1">
         <div className="p-4 border-b bg-accent/50">
-          <div className="font-medium">Original Message</div>
-          <div className="mt-2">{parentMessage.content}</div>
+          <div className="flex items-start gap-3">
+            <Avatar 
+              className="h-8 w-8 mt-1"
+              style={{ 
+                backgroundColor: parentMessage.user?.avatarColor || 'hsl(0, 0%, 90%)'
+              }}
+            >
+              <AvatarFallback
+                style={{ 
+                  backgroundColor: parentMessage.user?.avatarColor || 'hsl(0, 0%, 90%)',
+                  color: 'black'
+                }}
+              >
+                {parentMessage.user ? 
+                  parentMessage.user.username.slice(0, 2).toUpperCase() : "?"}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold">
+                  {parentMessage.user?.username || "Unknown User"}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {formatDistanceToNow(new Date(parentMessage.createdAt), { addSuffix: true })}
+                </span>
+              </div>
+              <div className="mt-1">{parentMessage.content}</div>
+            </div>
+          </div>
         </div>
         <MessageList messages={threadMessages} />
       </ScrollArea>

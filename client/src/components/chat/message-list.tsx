@@ -2,8 +2,10 @@ import { useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageSquare, Trash2 } from "lucide-react";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import type { Message } from "@db/schema";
 import { useChat } from "@/hooks/use-chat";
+import { formatDistanceToNow } from "date-fns";
 
 interface MessageListProps {
   messages: Message[];
@@ -26,8 +28,31 @@ export function MessageList({ messages, onThreadClick }: MessageListProps) {
     <ScrollArea className="flex-1 p-4">
       <div className="space-y-4">
         {messages.map((message) => (
-          <div key={message.id} className="flex gap-3 group">
+          <div key={message.id} className="flex items-start gap-3 group">
+            <Avatar 
+              className="h-8 w-8 mt-1"
+              style={{ 
+                backgroundColor: message.user?.avatarColor || 'hsl(0, 0%, 90%)'
+              }}
+            >
+              <AvatarFallback
+                style={{ 
+                  backgroundColor: message.user?.avatarColor || 'hsl(0, 0%, 90%)',
+                  color: 'black'
+                }}
+              >
+                {message.user ? message.user.username.slice(0, 2).toUpperCase() : "?"}
+              </AvatarFallback>
+            </Avatar>
             <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold">
+                  {message.user?.username || "Unknown User"}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })}
+                </span>
+              </div>
               <div className="mt-1">{message.content}</div>
               <div className="mt-2 flex items-center gap-2">
                 {onThreadClick && (
