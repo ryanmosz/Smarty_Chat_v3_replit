@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 export default function AuthPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [activeTab, setActiveTab] = useState("login");
   const { login, register } = useUser();
   const { toast } = useToast();
 
@@ -29,10 +30,24 @@ export default function AuthPage() {
         return;
       }
 
-      toast({
-        title: "Success",
-        description: `${action === "login" ? "Logged in" : "Registered"} successfully!`,
-      });
+      if (action === "register") {
+        // Clear form fields
+        setUsername("");
+        setPassword("");
+        // Switch to login tab
+        setActiveTab("login");
+        // Show success message
+        toast({
+          title: "Success",
+          description: "Signed up successfully. Now you can log in.",
+        });
+      } else {
+        // Only show success message for login
+        toast({
+          title: "Success",
+          description: "Logged in successfully!",
+        });
+      }
     } catch (error) {
       toast({
         variant: "destructive",
@@ -49,7 +64,7 @@ export default function AuthPage() {
           <CardTitle>Welcome to Smarty Chat</CardTitle>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="login">
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="login">Login</TabsTrigger>
               <TabsTrigger value="register">Register</TabsTrigger>
