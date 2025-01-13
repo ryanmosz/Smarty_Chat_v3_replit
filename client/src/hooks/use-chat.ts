@@ -15,6 +15,7 @@ export function useChat() {
   const getChannelMessages = (channelId: number) => {
     return useQuery<Message[]>({
       queryKey: [`/api/channels/${channelId}/messages`],
+      select: (messages) => messages.filter(m => !m.threadParentId), // Only show root messages
     });
   };
 
@@ -47,30 +48,47 @@ export function useChat() {
         queryKey: [`/api/channels/${newMessage.channelId}/messages`] 
       });
 
-      // Get the current messages
-      const previousMessages = queryClient.getQueryData<Message[]>(
-        [`/api/channels/${newMessage.channelId}/messages`]
-      ) || [];
+      if (newMessage.threadParentId) {
+        await queryClient.cancelQueries({ 
+          queryKey: [`/api/messages/${newMessage.threadParentId}/thread`] 
+        });
+      }
 
       // Create an optimistic message
       const optimisticMessage: Message = {
         id: Date.now(), // Temporary ID
         content: newMessage.content,
         channelId: newMessage.channelId,
-        threadParentId: newMessage.threadParentId,
+        threadParentId: newMessage.threadParentId || null,
         userId: null, // Will be set by the server
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
         isDeleted: false,
       };
 
-      // Update the messages immediately
-      queryClient.setQueryData<Message[]>(
-        [`/api/channels/${newMessage.channelId}/messages`],
-        [...previousMessages, optimisticMessage]
-      );
+      if (newMessage.threadParentId) {
+        // Update thread messages
+        const previousThreadMessages = queryClient.getQueryData<Message[]>(
+          [`/api/messages/${newMessage.threadParentId}/thread`]
+        ) || [];
 
-      return { previousMessages };
+        queryClient.setQueryData<Message[]>(
+          [`/api/messages/${newMessage.threadParentId}/thread`],
+          [...previousThreadMessages, optimisticMessage]
+        );
+      } else {
+        // Update channel messages
+        const previousMessages = queryClient.getQueryData<Message[]>(
+          [`/api/channels/${newMessage.channelId}/messages`]
+        ) || [];
+
+        queryClient.setQueryData<Message[]>(
+          [`/api/channels/${newMessage.channelId}/messages`],
+          [...previousMessages, optimisticMessage]
+        );
+      }
+
+      return { optimisticMessage };
     },
   });
 
@@ -89,7 +107,7 @@ export function useChat() {
   const deleteMessage = useMutation({
     mutationFn: (messageId: number) => {
       chatWs.send({
-        type: 'delete_message',
+        type: 'message_deleted',
         payload: { id: messageId }
       });
       return Promise.resolve();
@@ -106,19 +124,30 @@ export function useChat() {
           queryClient.invalidateQueries({ queryKey: ['/api/channels'] });
           break;
         case 'message':
-          // Update the messages for the specific channel
-          const channelId = message.payload.channelId;
-          const queryKey = [`/api/channels/${channelId}/messages`];
+          const { channelId, threadParentId } = message.payload;
 
-          // Get current messages
-          const currentMessages = queryClient.getQueryData<Message[]>(queryKey) || [];
+          if (threadParentId) {
+            // Update thread messages
+            const threadQueryKey = [`/api/messages/${threadParentId}/thread`];
+            const currentThreadMessages = queryClient.getQueryData<Message[]>(threadQueryKey) || [];
 
-          // Add new message if it doesn't exist
-          if (!currentMessages.some(m => m.id === message.payload.id)) {
-            queryClient.setQueryData<Message[]>(
-              queryKey,
-              [...currentMessages, message.payload]
-            );
+            if (!currentThreadMessages.some(m => m.id === message.payload.id)) {
+              queryClient.setQueryData<Message[]>(
+                threadQueryKey,
+                [...currentThreadMessages, message.payload]
+              );
+            }
+          } else {
+            // Update channel messages
+            const channelQueryKey = [`/api/channels/${channelId}/messages`];
+            const currentMessages = queryClient.getQueryData<Message[]>(channelQueryKey) || [];
+
+            if (!currentMessages.some(m => m.id === message.payload.id)) {
+              queryClient.setQueryData<Message[]>(
+                channelQueryKey,
+                [...currentMessages, message.payload]
+              );
+            }
           }
           break;
       }
