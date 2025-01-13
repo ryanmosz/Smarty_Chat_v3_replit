@@ -29,9 +29,13 @@ export function ThreadPanel({ parentMessage, users, onClose }: ThreadPanelProps)
           <div className="font-medium">Original Message</div>
           <div className="mt-2">{parentMessage.content}</div>
         </div>
+        {/* Since parentMessage is already a Message type, channelId is guaranteed to exist */}
         <MessageList messages={threadMessages} users={users} />
       </ScrollArea>
-      <MessageInput channelId={parentMessage.channelId} threadParentId={parentMessage.id} />
+      <MessageInput 
+        channelId={parentMessage.channelId!} 
+        threadParentId={parentMessage.id} 
+      />
     </div>
   );
 }
