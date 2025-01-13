@@ -106,7 +106,7 @@ export function setupAuth(app: Express, sessionMiddleware: RequestHandler) {
 
       const hashedPassword = await crypto.hash(password);
 
-      const [newUser] = await db
+      await db
         .insert(users)
         .values({
           username,
@@ -114,14 +114,9 @@ export function setupAuth(app: Express, sessionMiddleware: RequestHandler) {
         })
         .returning();
 
-      req.login(newUser, (err) => {
-        if (err) {
-          return next(err);
-        }
-        return res.json({
-          message: "Registration successful",
-          user: { id: newUser.id, username: newUser.username },
-        });
+      // Don't log the user in, just return success
+      return res.json({
+        message: "Registration successful",
       });
     } catch (error) {
       next(error);
