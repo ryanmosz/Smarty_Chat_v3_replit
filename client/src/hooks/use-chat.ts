@@ -33,6 +33,9 @@ export function useChat() {
     });
   };
 
+  // Generate a temporary ID for optimistic updates
+  const generateTempId = () => `temp-${Date.now()}`;
+
   // Send Message
   const sendMessage = useMutation({
     mutationFn: (message: { content: string; channelId: number; threadParentId?: number }) => {
@@ -43,6 +46,8 @@ export function useChat() {
       return Promise.resolve();
     },
     onMutate: async (newMessage) => {
+      const tempId = generateTempId();
+
       // Cancel any outgoing refetches
       await queryClient.cancelQueries({ 
         queryKey: [`/api/channels/${newMessage.channelId}/messages`] 
@@ -56,7 +61,7 @@ export function useChat() {
 
       // Create an optimistic message
       const optimisticMessage: Message = {
-        id: Date.now(), // Temporary ID
+        id: tempId as any, // Temporary ID
         content: newMessage.content,
         channelId: newMessage.channelId,
         threadParentId: newMessage.threadParentId || null,
@@ -88,8 +93,23 @@ export function useChat() {
         );
       }
 
-      return { optimisticMessage };
+      return { optimisticMessage, tempId };
     },
+    onSuccess: (_, variables, context) => {
+      if (!context) return;
+
+      // Clean up optimistic update on success
+      const { tempId } = context;
+      const queryKey = variables.threadParentId 
+        ? [`/api/messages/${variables.threadParentId}/thread`]
+        : [`/api/channels/${variables.channelId}/messages`];
+
+      const messages = queryClient.getQueryData<Message[]>(queryKey) || [];
+      queryClient.setQueryData<Message[]>(
+        queryKey,
+        messages.filter(m => m.id !== tempId)
+      );
+    }
   });
 
   // Add Reaction
@@ -120,7 +140,6 @@ export function useChat() {
       switch (message.type) {
         case 'channel_created':
         case 'channel_deleted':
-          // Invalidate channels query to trigger a refetch
           queryClient.invalidateQueries({ queryKey: ['/api/channels'] });
           break;
         case 'message':
@@ -131,10 +150,11 @@ export function useChat() {
             const threadQueryKey = [`/api/messages/${threadParentId}/thread`];
             const currentThreadMessages = queryClient.getQueryData<Message[]>(threadQueryKey) || [];
 
+            // Only add if not already present
             if (!currentThreadMessages.some(m => m.id === message.payload.id)) {
               queryClient.setQueryData<Message[]>(
                 threadQueryKey,
-                [...currentThreadMessages, message.payload]
+                currentThreadMessages.filter(m => !String(m.id).startsWith('temp-')).concat(message.payload)
               );
             }
           } else {
@@ -142,10 +162,11 @@ export function useChat() {
             const channelQueryKey = [`/api/channels/${channelId}/messages`];
             const currentMessages = queryClient.getQueryData<Message[]>(channelQueryKey) || [];
 
+            // Only add if not already present
             if (!currentMessages.some(m => m.id === message.payload.id)) {
               queryClient.setQueryData<Message[]>(
                 channelQueryKey,
-                [...currentMessages, message.payload]
+                currentMessages.filter(m => !String(m.id).startsWith('temp-')).concat(message.payload)
               );
             }
           }
