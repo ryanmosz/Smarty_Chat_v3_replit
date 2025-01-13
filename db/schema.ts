@@ -113,8 +113,8 @@ const baseUserSchema = createInsertSchema(users);
 
 // Enhanced schemas with additional validation
 export const insertUserSchema = baseUserSchema.extend({
-  username: z.string().min(3),
-  password: z.string().min(6),
+  username: z.string().min(1),
+  password: z.string().min(1),
 });
 
 export const selectUserSchema = createSelectSchema(users);
