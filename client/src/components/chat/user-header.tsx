@@ -8,8 +8,13 @@ export function UserHeader() {
   const { user } = useUser();
 
   return (
-    <Avatar className="h-8 w-8">
-      <AvatarFallback>
+    <Avatar 
+      className="h-8 w-8"
+      style={{ backgroundColor: user?.avatarColor || 'hsl(0, 0%, 90%)' }}
+    >
+      <AvatarFallback 
+        style={{ backgroundColor: user?.avatarColor || 'hsl(0, 0%, 90%)', color: 'white' }}
+      >
         {user ? user.username.slice(0, 2).toUpperCase() : "U"}
       </AvatarFallback>
     </Avatar>
