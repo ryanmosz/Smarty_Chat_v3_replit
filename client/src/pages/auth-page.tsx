@@ -43,7 +43,7 @@ export default function AuthPage() {
         // Show success message
         toast({
           title: "Success",
-          description: "Signed up successfully. Now you can log in.",
+          description: "Registration successful! Please login with your new account.",
         });
       } else {
         // Only show success message for login

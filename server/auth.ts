@@ -104,44 +104,29 @@ export function setupAuth(app: Express, sessionMiddleware: RequestHandler) {
         return res.status(400).send("Username already exists");
       }
 
-      // Get least recently used color from color assignments or create new one
-      const avatarColors = [
-        'hsl(10, 70%, 50%)',
-        'hsl(40, 70%, 50%)',
-        'hsl(70, 70%, 50%)',
-        'hsl(100, 70%, 50%)',
-        'hsl(130, 70%, 50%)',
-        'hsl(160, 70%, 50%)',
-        'hsl(190, 70%, 50%)',
-        'hsl(220, 70%, 50%)',
-        'hsl(250, 70%, 50%)',
-        'hsl(280, 70%, 50%)',
-        'hsl(310, 70%, 50%)',
-        'hsl(340, 70%, 50%)',
-      ];
+      // Generate a unique HSL color value
+      const hue = Math.floor(Math.random() * 360); // Random hue between 0-360
+      const avatarColor = `hsl(${hue}, 70%, 50%)`;
 
-      // Get color assignment with oldest last_used timestamp
+      // Update or insert the color assignment
       const [oldestColorAssignment] = await db
         .select()
         .from(colorAssignments)
         .orderBy(colorAssignments.lastUsed)
         .limit(1);
 
-      let avatarColor: string;
-
-      if (!oldestColorAssignment) {
-        // No colors assigned yet, pick the first one
-        avatarColor = avatarColors[0];
+      if (oldestColorAssignment) {
+        await db
+          .update(colorAssignments)
+          .set({ 
+            color: avatarColor,
+            lastUsed: new Date() 
+          })
+          .where(eq(colorAssignments.id, oldestColorAssignment.id));
+      } else {
         await db.insert(colorAssignments).values({
           color: avatarColor,
         });
-      } else {
-        // Update the oldest color's timestamp and use it
-        avatarColor = oldestColorAssignment.color;
-        await db
-          .update(colorAssignments)
-          .set({ lastUsed: new Date() })
-          .where(eq(colorAssignments.id, oldestColorAssignment.id));
       }
 
       const hashedPassword = await crypto.hash(password);
@@ -152,11 +137,11 @@ export function setupAuth(app: Express, sessionMiddleware: RequestHandler) {
           username,
           password: hashedPassword,
           avatarColor,
-        })
-        .returning();
+        });
 
+      // Don't login the user automatically, just return success
       return res.json({
-        message: "Registration successful",
+        message: "Registration successful"
       });
     } catch (error) {
       next(error);
