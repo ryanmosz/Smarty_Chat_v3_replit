@@ -4,6 +4,7 @@ import { ChannelList } from "@/components/chat/channel-list";
 import { MessageList } from "@/components/chat/message-list";
 import { MessageInput } from "@/components/chat/message-input";
 import { ThreadPanel } from "@/components/chat/thread-panel";
+import { ChatHeader } from "@/components/chat/chat-header";
 import type { Message } from "@db/schema";
 
 export default function ChatPage() {
@@ -25,6 +26,7 @@ export default function ChatPage() {
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col">
+        <ChatHeader />
         {/* Chat Area */}
         <div className="flex-1 flex">
           <div className="flex-1 flex flex-col">
