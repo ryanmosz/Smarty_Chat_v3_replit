@@ -3,6 +3,13 @@ import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { relations } from "drizzle-orm";
 import { z } from "zod";
 
+// Color tracking table
+export const colorAssignments = pgTable("color_assignments", {
+  id: serial("id").primaryKey(),
+  color: text("color").notNull(),
+  lastUsed: timestamp("last_used").defaultNow().notNull(),
+});
+
 // Users table
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
