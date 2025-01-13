@@ -4,6 +4,8 @@ import { Search } from "lucide-react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { Message } from "@db/schema";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { format } from "date-fns";
 
 export function SearchBar() {
   const [query, setQuery] = useState("");
@@ -44,7 +46,34 @@ export function SearchBar() {
               key={message.id}
               className="p-2 rounded bg-accent text-accent-foreground"
             >
-              <div className="text-sm">{message.content}</div>
+              <div className="flex items-start gap-2">
+                <Avatar 
+                  className="h-6 w-6"
+                  style={{ 
+                    backgroundColor: message.user?.avatarColor || 'hsl(0, 0%, 90%)'
+                  }}
+                >
+                  <AvatarFallback
+                    style={{ 
+                      backgroundColor: message.user?.avatarColor || 'hsl(0, 0%, 90%)',
+                      color: 'black'
+                    }}
+                  >
+                    {message.user?.username.slice(0, 2).toUpperCase() || "?"}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1">
+                  <div className="flex gap-2 items-center text-sm">
+                    <span className="font-medium">
+                      {message.user?.username}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {message.createdAt && format(new Date(message.createdAt), 'MMM d, h:mm a')}
+                    </span>
+                  </div>
+                  <div className="text-sm mt-1">{message.content}</div>
+                </div>
+              </div>
             </div>
           ))}
         </div>
