@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useState } from "react";
 import type { Channel } from "@db/schema";
 import { useToast } from "@/hooks/use-toast";
+import { useUser } from "@/hooks/use-user";
 
 interface ChannelListProps {
   channels: Channel[];
@@ -30,6 +31,7 @@ export function ChannelList({
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const { toast } = useToast();
+  const { user } = useUser();
 
   const handleCreateChannel = async () => {
     if (!name.trim()) {
@@ -163,14 +165,17 @@ export function ChannelList({
                 <Hash className="h-4 w-4 mr-2" />
                 {channel.name}
               </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                onClick={() => handleDeleteChannel(channel.id)}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
+              {/* Only show delete button if user created the channel */}
+              {user?.id === channel.createdById && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                  onClick={() => handleDeleteChannel(channel.id)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
             </div>
           ))}
         </div>

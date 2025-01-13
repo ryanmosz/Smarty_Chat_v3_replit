@@ -6,6 +6,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import type { Message } from "@db/schema";
 import { useChat } from "@/hooks/use-chat";
 import { format } from "date-fns";
+import { useUser } from "@/hooks/use-user";
 
 interface MessageListProps {
   messages: Message[];
@@ -15,6 +16,7 @@ interface MessageListProps {
 export function MessageList({ messages, onThreadClick }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const { deleteMessage } = useChat();
+  const { user } = useUser();
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -66,14 +68,17 @@ export function MessageList({ messages, onThreadClick }: MessageListProps) {
                     Thread
                   </Button>
                 )}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="opacity-0 group-hover:opacity-100 text-destructive"
-                  onClick={() => handleDelete(message.id)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                {/* Only show delete button if user authored the message */}
+                {user?.id === message.userId && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="opacity-0 group-hover:opacity-100 text-destructive"
+                    onClick={() => handleDelete(message.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
             </div>
           </div>
