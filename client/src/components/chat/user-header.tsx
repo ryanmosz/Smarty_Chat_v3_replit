@@ -13,7 +13,7 @@ export function UserHeader() {
       style={{ backgroundColor: user?.avatarColor || 'hsl(0, 0%, 90%)' }}
     >
       <AvatarFallback 
-        style={{ backgroundColor: user?.avatarColor || 'hsl(0, 0%, 90%)', color: 'white' }}
+        style={{ backgroundColor: user?.avatarColor || 'hsl(0, 0%, 90%)', color: 'black' }}
       >
         {user ? user.username.slice(0, 2).toUpperCase() : "U"}
       </AvatarFallback>
@@ -46,7 +46,7 @@ export function LogoutButton() {
   };
 
   return (
-    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleLogout}>
+    <Button variant="ghost" size="icon" onClick={handleLogout}>
       <LogOut className="h-4 w-4" />
     </Button>
   );
