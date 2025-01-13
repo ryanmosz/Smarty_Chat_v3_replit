@@ -132,6 +132,32 @@ export function useChat() {
       });
       return Promise.resolve();
     },
+    onMutate: async (messageId) => {
+      // Get all possible query keys that might contain this message
+      const channelQueryKeys = channels?.map(c => [`/api/channels/${c.id}/messages`]) || [];
+      const threadQueryKey = [`/api/messages/${messageId}/thread`];
+
+      // Cancel any outgoing refetches
+      await Promise.all([
+        ...channelQueryKeys.map(key => queryClient.cancelQueries({ queryKey: key })),
+        queryClient.cancelQueries({ queryKey: threadQueryKey })
+      ]);
+
+      // Update all relevant queries to remove the message
+      channelQueryKeys.forEach(queryKey => {
+        const messages = queryClient.getQueryData<Message[]>(queryKey) || [];
+        queryClient.setQueryData<Message[]>(
+          queryKey,
+          messages.filter(m => m.id !== messageId)
+        );
+      });
+
+      const threadMessages = queryClient.getQueryData<Message[]>(threadQueryKey) || [];
+      queryClient.setQueryData<Message[]>(
+        threadQueryKey,
+        threadMessages.filter(m => m.id !== messageId)
+      );
+    },
   });
 
   // Subscribe to WebSocket updates
@@ -171,11 +197,34 @@ export function useChat() {
             }
           }
           break;
+        case 'message_deleted':
+          const messageId = message.payload.id;
+
+          // Remove message from all possible locations
+          channels?.forEach(channel => {
+            const channelQueryKey = [`/api/channels/${channel.id}/messages`];
+            const messages = queryClient.getQueryData<Message[]>(channelQueryKey) || [];
+
+            queryClient.setQueryData<Message[]>(
+              channelQueryKey,
+              messages.filter(m => m.id !== messageId)
+            );
+          });
+
+          // Also check thread messages
+          const threadQueryKey = [`/api/messages/${messageId}/thread`];
+          const threadMessages = queryClient.getQueryData<Message[]>(threadQueryKey) || [];
+
+          queryClient.setQueryData<Message[]>(
+            threadQueryKey,
+            threadMessages.filter(m => m.id !== messageId)
+          );
+          break;
       }
     });
 
     return () => unsubscribe();
-  }, [queryClient]);
+  }, [queryClient, channels]);
 
   return {
     channels,
