@@ -21,13 +21,8 @@ export default function ChatPage() {
 
   return (
     <div className="h-screen flex">
-      <div className="flex flex-col w-60">
-        <div className="border-b">
-          <div className="flex items-center justify-between p-4">
-            <UserHeader />
-            <SearchBar />
-          </div>
-        </div>
+      {/* Channel List Sidebar - Full Height */}
+      <div className="w-60 border-r bg-background">
         <ChannelList
           channels={channels}
           selectedChannelId={selectedChannelId}
@@ -35,7 +30,17 @@ export default function ChatPage() {
         />
       </div>
 
+      {/* Main Content Area */}
       <div className="flex-1 flex flex-col">
+        {/* Header - Only Above Main Chat */}
+        <div className="border-b bg-background">
+          <div className="flex items-center justify-between p-4">
+            <UserHeader />
+            <SearchBar />
+          </div>
+        </div>
+
+        {/* Chat Area */}
         <div className="flex-1 flex">
           <div className="flex-1 flex flex-col">
             {selectedChannelId ? (
