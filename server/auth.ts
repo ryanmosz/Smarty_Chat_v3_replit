@@ -35,6 +35,13 @@ declare global {
   }
 }
 
+// Add color generation function
+function generatePastelColor() {
+  // Generate pastel colors by using high lightness and medium saturation
+  const hue = Math.floor(Math.random() * 360);
+  return `hsl(${hue}, 70%, 80%)`;
+}
+
 export function setupAuth(app: Express) {
   const MemoryStore = createMemoryStore(session);
   const sessionSettings: session.SessionOptions = {
@@ -123,12 +130,13 @@ export function setupAuth(app: Express) {
       // Hash the password
       const hashedPassword = await crypto.hash(password);
 
-      // Create the new user
+      // Create the new user with a random pastel color
       const [newUser] = await db
         .insert(users)
         .values({
           username,
           password: hashedPassword,
+          avatarColor: generatePastelColor(),
         })
         .returning();
 

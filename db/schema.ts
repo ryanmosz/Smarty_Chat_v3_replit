@@ -10,6 +10,7 @@ export const users = pgTable("users", {
   password: text("password").notNull(),
   status: text("status").default("active"),
   avatarUrl: text("avatar_url"),
+  avatarColor: text("avatar_color"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

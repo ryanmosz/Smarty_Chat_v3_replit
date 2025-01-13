@@ -11,9 +11,9 @@ export function UserHeader() {
 
   return (
     <>
-      <Avatar className="h-8 w-8">
+      <Avatar className="h-8 w-8" style={{ backgroundColor: user.avatarColor || 'hsl(0, 0%, 90%)' }}>
         <AvatarImage src={user.avatarUrl || undefined} />
-        <AvatarFallback>
+        <AvatarFallback style={{ backgroundColor: user.avatarColor || 'hsl(0, 0%, 90%)' }}>
           {user.username.slice(0, 2).toUpperCase()}
         </AvatarFallback>
       </Avatar>
