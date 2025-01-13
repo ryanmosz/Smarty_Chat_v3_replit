@@ -3,6 +3,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import session from "express-session";
 import createMemoryStore from "memorystore";
+import { setupAuth } from "./auth";
 
 const app = express();
 app.use(express.json());
@@ -19,7 +20,8 @@ const sessionMiddleware = session({
   }),
 });
 
-app.use(sessionMiddleware);
+// Setup authentication with the session middleware
+setupAuth(app, sessionMiddleware);
 
 app.use((req, res, next) => {
   const start = Date.now();
