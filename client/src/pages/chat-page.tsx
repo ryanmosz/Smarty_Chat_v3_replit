@@ -21,16 +21,20 @@ export default function ChatPage() {
 
   return (
     <div className="h-screen flex">
-      <div className="flex flex-col">
-        <UserHeader />
-        <SearchBar />
+      <div className="flex flex-col w-60">
+        <div className="border-b">
+          <div className="flex items-center justify-between p-4">
+            <UserHeader />
+            <SearchBar />
+          </div>
+        </div>
         <ChannelList
           channels={channels}
           selectedChannelId={selectedChannelId}
           onChannelSelect={setSelectedChannelId}
         />
       </div>
-      
+
       <div className="flex-1 flex flex-col">
         <div className="flex-1 flex">
           <div className="flex-1 flex flex-col">
@@ -49,7 +53,7 @@ export default function ChatPage() {
               </div>
             )}
           </div>
-          
+
           {threadMessage && (
             <ThreadPanel
               parentMessage={threadMessage}

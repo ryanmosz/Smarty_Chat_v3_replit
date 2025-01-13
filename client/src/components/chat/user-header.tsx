@@ -31,23 +31,18 @@ export function UserHeader() {
   if (!user) return null;
 
   return (
-    <div className="p-4 border-b flex items-center justify-between bg-background">
-      <div className="flex items-center gap-3">
-        <Avatar>
-          <AvatarImage src={user.avatarUrl || undefined} />
-          <AvatarFallback>
-            {user.username.slice(0, 2).toUpperCase()}
-          </AvatarFallback>
-        </Avatar>
-        <div>
-          <div className="font-medium">{user.username}</div>
-          <div className="text-sm text-muted-foreground">
-            {user.status || "Active"}
-          </div>
-        </div>
+    <div className="flex items-center gap-2">
+      <Avatar className="h-8 w-8">
+        <AvatarImage src={user.avatarUrl || undefined} />
+        <AvatarFallback>
+          {user.username.slice(0, 2).toUpperCase()}
+        </AvatarFallback>
+      </Avatar>
+      <div className="flex-shrink-0">
+        <div className="text-sm font-medium">{user.username}</div>
       </div>
-      <Button variant="ghost" size="icon" onClick={handleLogout}>
-        <LogOut className="h-5 w-5" />
+      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleLogout}>
+        <LogOut className="h-4 w-4" />
       </Button>
     </div>
   );
