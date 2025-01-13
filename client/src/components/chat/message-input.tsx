@@ -4,6 +4,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Send, Paperclip } from "lucide-react";
 import { useChat } from "@/hooks/use-chat";
 import { useToast } from "@/hooks/use-toast";
+import { useUser } from "@/hooks/use-user";
 import { chatWs } from "@/lib/websocket";
 
 interface MessageInputProps {
@@ -17,6 +18,7 @@ export function MessageInput({ channelId, threadParentId }: MessageInputProps) {
   const typingTimeoutRef = useRef<NodeJS.Timeout>();
   const { sendMessage } = useChat();
   const { toast } = useToast();
+  const { user } = useUser();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleTyping = () => {
@@ -45,6 +47,7 @@ export function MessageInput({ channelId, threadParentId }: MessageInputProps) {
         content,
         channelId,
         threadParentId,
+        userId: user?.id,
       });
       setContent("");
     } catch (error) {

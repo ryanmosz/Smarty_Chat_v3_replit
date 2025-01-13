@@ -1,7 +1,7 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { Server } from 'http';
 import { db } from '@db';
-import { messages } from '@db/schema';
+import { messages, users } from '@db/schema';
 import { parse as parseUrl } from 'url';
 import { eq } from 'drizzle-orm';
 
@@ -46,13 +46,22 @@ export function setupWebSocket(server: Server) {
 
         switch (message.type) {
           case 'message':
-            const { content, channelId, threadParentId } = message.payload;
+            const { content, channelId, threadParentId, userId } = message.payload;
             const [newMessage] = await db
               .insert(messages)
-              .values({ content, channelId, threadParentId })
+              .values({ content, channelId, threadParentId, userId })
               .returning();
 
-            broadcast({ type: 'message', payload: newMessage });
+            // Fetch the complete message with user data
+            const [messageWithUser] = await db.query.messages.findMany({
+              where: eq(messages.id, newMessage.id),
+              with: {
+                user: true
+              },
+              limit: 1
+            });
+
+            broadcast({ type: 'message', payload: messageWithUser });
             break;
 
           case 'message_deleted':

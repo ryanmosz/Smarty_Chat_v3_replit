@@ -5,7 +5,7 @@ import { MessageSquare, Trash2 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import type { Message } from "@db/schema";
 import { useChat } from "@/hooks/use-chat";
-import { formatDistanceToNow } from "date-fns";
+import { format } from "date-fns";
 
 interface MessageListProps {
   messages: Message[];
@@ -41,16 +41,16 @@ export function MessageList({ messages, onThreadClick }: MessageListProps) {
                   color: 'black'
                 }}
               >
-                {message.user ? message.user.username.slice(0, 2).toUpperCase() : "?"}
+                {message.user?.username.slice(0, 2).toUpperCase() || "?"}
               </AvatarFallback>
             </Avatar>
             <div className="flex-1">
               <div className="flex items-center gap-2">
                 <span className="font-semibold">
-                  {message.user?.username || "Unknown User"}
+                  {message.user?.username}
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  {formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })}
+                  {message.createdAt && format(new Date(message.createdAt), 'MMM d, h:mm a')}
                 </span>
               </div>
               <div className="mt-1">{message.content}</div>
