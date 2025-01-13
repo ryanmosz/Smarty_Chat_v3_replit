@@ -14,6 +14,11 @@ export default function AuthPage() {
   const { login, register } = useUser();
   const { toast } = useToast();
 
+  const clearForm = () => {
+    setUsername("");
+    setPassword("");
+  };
+
   const handleSubmit = async (action: "login" | "register") => {
     try {
       const result = await (action === "login" ? login : register)({
@@ -32,8 +37,7 @@ export default function AuthPage() {
 
       if (action === "register") {
         // Clear form fields
-        setUsername("");
-        setPassword("");
+        clearForm();
         // Switch to login tab
         setActiveTab("login");
         // Show success message
@@ -64,7 +68,13 @@ export default function AuthPage() {
           <CardTitle>Welcome to Smarty Chat</CardTitle>
         </CardHeader>
         <CardContent>
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <Tabs 
+            value={activeTab} 
+            onValueChange={(value) => {
+              setActiveTab(value);
+              clearForm(); // Clear form when switching tabs
+            }}
+          >
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="login">Login</TabsTrigger>
               <TabsTrigger value="register">Register</TabsTrigger>
