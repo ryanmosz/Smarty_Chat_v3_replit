@@ -5,7 +5,24 @@ import { LogOut } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export function UserHeader() {
-  const { user, logout } = useUser();
+  const { user } = useUser();
+
+  if (!user) return null;
+
+  return (
+    <>
+      <Avatar className="h-8 w-8">
+        <AvatarImage src={user.avatarUrl || undefined} />
+        <AvatarFallback>
+          {user.username.slice(0, 2).toUpperCase()}
+        </AvatarFallback>
+      </Avatar>
+    </>
+  );
+}
+
+export function LogoutButton() {
+  const { logout } = useUser();
   const { toast } = useToast();
 
   const handleLogout = async () => {
@@ -28,19 +45,9 @@ export function UserHeader() {
     }
   };
 
-  if (!user) return null;
-
   return (
-    <div className="flex items-center gap-2">
-      <Avatar className="h-8 w-8">
-        <AvatarImage src={user.avatarUrl || undefined} />
-        <AvatarFallback>
-          {user.username.slice(0, 2).toUpperCase()}
-        </AvatarFallback>
-      </Avatar>
-      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleLogout}>
-        <LogOut className="h-4 w-4" />
-      </Button>
-    </div>
+    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleLogout}>
+      <LogOut className="h-4 w-4" />
+    </Button>
   );
 }

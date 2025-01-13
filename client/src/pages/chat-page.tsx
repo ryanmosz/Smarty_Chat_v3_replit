@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useChat } from "@/hooks/use-chat";
 import { useUser } from "@/hooks/use-user";
-import { UserHeader } from "@/components/chat/user-header";
+import { UserHeader, LogoutButton } from "@/components/chat/user-header";
 import { SearchBar } from "@/components/chat/search-bar";
 import { ChannelList } from "@/components/chat/channel-list";
 import { MessageList } from "@/components/chat/message-list";
@@ -36,9 +36,10 @@ export default function ChatPage() {
         <div className="border-b bg-background">
           <div className="flex items-center justify-between p-4">
             <div className="flex items-center gap-4">
-              <SearchBar />
               <UserHeader />
+              <SearchBar />
             </div>
+            <LogoutButton />
           </div>
         </div>
 
