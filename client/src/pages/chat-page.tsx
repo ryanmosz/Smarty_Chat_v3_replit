@@ -35,8 +35,10 @@ export default function ChatPage() {
         {/* Header - Only Above Main Chat */}
         <div className="border-b bg-background">
           <div className="flex items-center justify-between p-4">
-            <UserHeader />
-            <SearchBar />
+            <div className="flex items-center gap-4">
+              <SearchBar />
+              <UserHeader />
+            </div>
           </div>
         </div>
 

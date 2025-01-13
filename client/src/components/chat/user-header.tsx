@@ -38,9 +38,6 @@ export function UserHeader() {
           {user.username.slice(0, 2).toUpperCase()}
         </AvatarFallback>
       </Avatar>
-      <div className="flex-shrink-0">
-        <div className="text-sm font-medium">{user.username}</div>
-      </div>
       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleLogout}>
         <LogOut className="h-4 w-4" />
       </Button>
