@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { db } from "@db";
-import { channels } from "@db/schema";
+import { channels, messages } from "@db/schema";
 import { eq } from "drizzle-orm";
 import { setupWebSocket } from "./websocket";
 
@@ -45,15 +45,29 @@ export function registerRoutes(app: Express): Server {
   });
 
   app.delete("/api/channels/:id", async (req, res) => {
+    const channelId = parseInt(req.params.id);
+    if (isNaN(channelId)) {
+      return res.status(400).json({ message: 'Invalid channel ID' });
+    }
+
     try {
-      const channelId = parseInt(req.params.id);
-      if (isNaN(channelId)) {
-        return res.status(400).json({ message: 'Invalid channel ID' });
-      }
+      // Use a transaction to ensure both operations succeed or fail together
+      await db.transaction(async (tx) => {
+        // First, delete all messages in the channel
+        await tx.delete(messages)
+          .where(eq(messages.channelId, channelId));
 
-      await db.delete(channels)
-        .where(eq(channels.id, channelId));
+        // Then delete the channel
+        const [deletedChannel] = await tx.delete(channels)
+          .where(eq(channels.id, channelId))
+          .returning();
 
+        if (!deletedChannel) {
+          throw new Error('Channel not found');
+        }
+      });
+
+      // If we get here, both operations succeeded
       // Broadcast channel deletion to all connected clients
       wss.broadcast({
         type: 'channel_deleted',
@@ -61,9 +75,14 @@ export function registerRoutes(app: Express): Server {
       });
 
       res.json({ message: 'Channel deleted successfully' });
-    } catch (error) {
+    } catch (err) {
+      const error = err as Error;
       console.error('Error deleting channel:', error);
-      res.status(500).json({ message: 'Failed to delete channel' });
+      if (error.message === 'Channel not found') {
+        res.status(404).json({ message: 'Channel not found' });
+      } else {
+        res.status(500).json({ message: 'Failed to delete channel' });
+      }
     }
   });
 

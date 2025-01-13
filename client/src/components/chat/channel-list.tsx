@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useState } from "react";
 import type { Channel } from "@db/schema";
+import { useToast } from "@/hooks/use-toast";
 
 interface ChannelListProps {
   channels: Channel[];
@@ -28,6 +29,7 @@ export function ChannelList({
   const [isOpen, setIsOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const { toast } = useToast();
 
   const handleCreateChannel = async () => {
     try {
@@ -37,13 +39,24 @@ export function ChannelList({
         body: JSON.stringify({ name, description }),
       });
 
-      if (response.ok) {
-        setIsOpen(false);
-        setName("");
-        setDescription("");
+      if (!response.ok) {
+        throw new Error(await response.text());
       }
-    } catch (error) {
-      console.error("Failed to create channel:", error);
+
+      setIsOpen(false);
+      setName("");
+      setDescription("");
+      toast({
+        title: "Success",
+        description: "Channel created successfully",
+      });
+    } catch (err) {
+      const error = err as Error;
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to create channel",
+      });
     }
   };
 
@@ -54,10 +67,25 @@ export function ChannelList({
       });
 
       if (!response.ok) {
-        throw new Error("Failed to delete channel");
+        throw new Error(await response.text());
       }
-    } catch (error) {
-      console.error("Error deleting channel:", error);
+
+      // If this was the selected channel, clear the selection
+      if (selectedChannelId === channelId) {
+        onChannelSelect(0);
+      }
+
+      toast({
+        title: "Success",
+        description: "Channel deleted successfully",
+      });
+    } catch (err) {
+      const error = err as Error;
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to delete channel",
+      });
     }
   };
 
