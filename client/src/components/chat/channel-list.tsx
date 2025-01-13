@@ -32,6 +32,15 @@ export function ChannelList({
   const { toast } = useToast();
 
   const handleCreateChannel = async () => {
+    if (!name.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Channel name is required",
+      });
+      return;
+    }
+
     try {
       const response = await fetch("/api/channels", {
         method: "POST",
@@ -103,13 +112,25 @@ export function ChannelList({
             <DialogHeader>
               <DialogTitle>Create Channel</DialogTitle>
             </DialogHeader>
-            <div className="space-y-4">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleCreateChannel();
+              }}
+              className="space-y-4"
+            >
               <div>
                 <Label htmlFor="name">Channel Name</Label>
                 <Input
                   id="name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && name.trim()) {
+                      e.preventDefault();
+                      handleCreateChannel();
+                    }
+                  }}
                 />
               </div>
               <div>
@@ -120,8 +141,13 @@ export function ChannelList({
                   onChange={(e) => setDescription(e.target.value)}
                 />
               </div>
-              <Button onClick={handleCreateChannel}>Create Channel</Button>
-            </div>
+              <Button 
+                type="submit"
+                disabled={!name.trim()}
+              >
+                Create Channel
+              </Button>
+            </form>
           </DialogContent>
         </Dialog>
       </div>
