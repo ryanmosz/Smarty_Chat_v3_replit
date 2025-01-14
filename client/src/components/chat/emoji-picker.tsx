@@ -46,7 +46,16 @@ export function EmojiPicker({ messageId }: EmojiPickerProps) {
   });
 
   const handleEmojiClick = async (emoji: Emoji | string) => {
-    if (!user) return;
+    if (!user) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "You must be logged in to add reactions",
+      });
+      return;
+    }
+
+    console.log('Adding reaction:', { messageId, emoji }); // Debug log
 
     setIsSubmitting(true);
     try {
@@ -57,12 +66,13 @@ export function EmojiPicker({ messageId }: EmojiPickerProps) {
           emoji,
         });
       } else {
-        // Handle new emoji format with proper error handling
+        // Handle new emoji format
         await addReaction.mutateAsync({
           messageId,
           emojiId: emoji.id,
         });
       }
+
       toast({
         description: "Reaction added successfully",
         duration: 2000,

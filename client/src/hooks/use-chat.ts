@@ -184,6 +184,8 @@ export function useChat() {
   // Add Reaction - Updated with improved error handling and optimistic updates
   const addReaction = useMutation({
     mutationFn: async ({ messageId, emojiId, emoji }: { messageId: number; emojiId?: number; emoji?: string }) => {
+      console.log('Sending reaction request:', { messageId, emojiId, emoji }); // Debug log
+
       const response = await fetch(`/api/messages/${messageId}/reactions`, {
         method: 'POST',
         headers: {
@@ -194,14 +196,16 @@ export function useChat() {
 
       if (!response.ok) {
         const errorText = await response.text();
+        console.error('Reaction API error:', errorText); // Debug log
         throw new Error(errorText || 'Failed to add reaction');
       }
 
       const data = await response.json();
+      console.log('Reaction API response:', data); // Debug log
       return data;
     },
     onMutate: async (variables) => {
-      // Cancel any outgoing refetches so they don't overwrite our optimistic update
+      // Cancel any outgoing refetches
       await queryClient.cancelQueries({ queryKey: [`/api/messages/${variables.messageId}`] });
 
       // Return context with the optimistic value
@@ -215,42 +219,18 @@ export function useChat() {
       }
     },
     onSuccess: (data, variables) => {
-      // Update both channel messages and thread messages on success
-      const messageId = variables.messageId;
+      console.log('Reaction added successfully:', data); // Debug log
 
-      // Update channel messages if it exists in any channel
-      const channelQueryKeys = queryClient.getQueryCache().findAll(['api/channels']);
-      channelQueryKeys.forEach(query => {
-        queryClient.setQueryData<MessageWithUser[]>(query.queryKey, (oldMessages) => {
-          if (!oldMessages) return oldMessages;
-          return oldMessages.map(message => {
-            if (message.id === messageId) {
-              return {
-                ...message,
-                reactions: [...(message.reactions || []), data],
-              };
-            }
-            return message;
-          });
-        });
+      // Update both channel messages and thread messages
+      queryClient.invalidateQueries({ 
+        queryKey: [`/api/channels/${data.channelId}/messages`],
       });
 
-      // Update thread messages if applicable
-      const threadQueryKeys = queryClient.getQueryCache().findAll(['/api/messages']);
-      threadQueryKeys.forEach(query => {
-        queryClient.setQueryData<MessageWithUser[]>(query.queryKey, (oldMessages) => {
-          if (!oldMessages) return oldMessages;
-          return oldMessages.map(message => {
-            if (message.id === messageId) {
-              return {
-                ...message,
-                reactions: [...(message.reactions || []), data],
-              };
-            }
-            return message;
-          });
+      if (data.threadParentId) {
+        queryClient.invalidateQueries({ 
+          queryKey: [`/api/messages/${data.threadParentId}/thread`],
         });
-      });
+      }
     },
   });
 
