@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { db } from "@db";
 import { channels, messages, users, directMessages, reactions } from "@db/schema";
-import { eq, or, sql, and, desc } from "drizzle-orm";
+import { eq, or, sql, and, desc, ne } from "drizzle-orm";
 import { setupWebSocket } from "./websocket";
 import multer from "multer";
 import path from "path";
@@ -216,16 +216,15 @@ export function registerRoutes(app: Express): Server {
         return res.status(401).json({ message: 'Authentication required' });
       }
 
+      // Get all direct messages where current user is either sender or receiver
       const allDirectMessages = await db.query.directMessages.findMany({
-        where: or(
-          and(
+        where: and(
+          or(
             eq(directMessages.fromUserId, currentUserId),
-            ne(directMessages.fromUserId, directMessages.toUserId)
+            eq(directMessages.toUserId, currentUserId)
           ),
-          and(
-            eq(directMessages.toUserId, currentUserId),
-            ne(directMessages.fromUserId, directMessages.toUserId)
-          )
+          // Exclude self-messages where sender is same as receiver
+          sql`${directMessages.fromUserId} != ${directMessages.toUserId}`
         ),
         with: {
           fromUser: true,
@@ -237,11 +236,16 @@ export function registerRoutes(app: Express): Server {
       // Get unique conversations (latest message for each user pair)
       const conversationMap = new Map<string, any>();
       allDirectMessages.forEach(dm => {
-        if (!dm.isDeleted && dm.fromUserId && dm.toUserId) {
+        if (!dm.isDeleted && dm.fromUser && dm.toUser) {
           const otherUserId = dm.fromUserId === currentUserId ? dm.toUserId : dm.fromUserId;
           const key = `${Math.min(currentUserId, otherUserId)}-${Math.max(currentUserId, otherUserId)}`;
+
+          // Only keep the most recent message for each conversation
           if (!conversationMap.has(key)) {
-            conversationMap.set(key, dm);
+            conversationMap.set(key, {
+              ...dm,
+              otherUser: dm.fromUserId === currentUserId ? dm.toUser : dm.fromUser
+            });
           }
         }
       });
@@ -253,7 +257,6 @@ export function registerRoutes(app: Express): Server {
       res.status(500).json({ message: 'Failed to fetch active conversations' });
     }
   });
-
 
 
   app.get("/api/search", async (req, res) => {
