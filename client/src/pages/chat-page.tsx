@@ -51,19 +51,21 @@ export default function ChatPage() {
 
   return (
     <div className="h-screen flex">
-      {/* Sidebar - Full Height */}
-      <div className="w-60 border-r bg-background flex flex-col">
-        <ChannelList
-          channels={channels}
-          selectedChannelId={selectedChannelId}
-          onChannelSelect={setSelectedChannelId}
-        />
-        <DirectMessageList
-          users={users}
-          selectedUserId={selectedUserId}
-          onUserSelect={setSelectedUserId}
-        />
-      </div>
+      {/* Unified Sidebar */}
+      <aside className="w-60 flex flex-col bg-background">
+        <div className="flex-grow overflow-y-auto">
+          <ChannelList
+            channels={channels}
+            selectedChannelId={selectedChannelId}
+            onChannelSelect={setSelectedChannelId}
+          />
+          <DirectMessageList
+            users={users}
+            selectedUserId={selectedUserId}
+            onUserSelect={setSelectedUserId}
+          />
+        </div>
+      </aside>
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col">
