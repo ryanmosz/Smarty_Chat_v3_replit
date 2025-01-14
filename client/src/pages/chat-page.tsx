@@ -32,12 +32,26 @@ export default function ChatPage() {
   const { data: directMessages = [] } = getDirectMessages(selectedUserId || 0);
   const { data: threadMessages = [] } = getThreadMessages(threadMessage?.id || 0);
 
+  // Listen for user selection from search
+  useEffect(() => {
+    const handleUserSelect = (e: Event) => {
+      const event = e as CustomEvent<number>;
+      setSelectedChannelId(undefined); // Clear channel selection when switching to DM
+      setSelectedUserId(event.detail);
+    };
+
+    window.addEventListener('selectUser', handleUserSelect);
+    return () => {
+      window.removeEventListener('selectUser', handleUserSelect);
+    };
+  }, []);
+
   // Extract channel ID and message ID from URL
   useEffect(() => {
-    // Parse channel ID from path
     const channelMatch = location.match(/\/channel\/(\d+)/);
     if (channelMatch) {
       const channelId = parseInt(channelMatch[1], 10);
+      setSelectedUserId(undefined); // Clear user selection when switching to channel
       setSelectedChannelId(channelId);
 
       // Parse message ID from query params

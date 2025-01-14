@@ -239,11 +239,8 @@ export function registerRoutes(app: Express): Server {
     try {
       const query = req.query.q as string;
       if (!query?.trim()) {
-        console.log('Empty search query');
         return res.json({ channels: [], messages: [], directMessages: [] });
       }
-
-      console.log('Processing search query:', query);
 
       // Use both full-text search and LIKE for better results
       const foundMessages = await db
@@ -260,12 +257,27 @@ export function registerRoutes(app: Express): Server {
           OR LOWER(content) LIKE ${`%${query.toLowerCase()}%`}
         `);
 
-      console.log('Search query results:', foundMessages.length, 'messages found');
-      console.log('Sample results:', foundMessages.slice(0, 2));
+      // Search direct messages
+      const foundDirectMessages = await db
+        .select({
+          id: directMessages.id,
+          content: directMessages.content,
+          fromUserId: directMessages.fromUserId,
+          toUserId: directMessages.toUserId,
+          createdAt: directMessages.createdAt,
+        })
+        .from(directMessages)
+        .where(sql`
+          to_tsvector('english', content) @@ plainto_tsquery('english', ${query})
+          OR LOWER(content) LIKE ${`%${query.toLowerCase()}%`}
+        `);
 
-      // Get users for messages
-      const userIds = foundMessages.map(m => m.userId).filter(Boolean);
-      console.log('User IDs for messages:', userIds);
+      // Get users for messages and direct messages
+      const userIds = [
+        ...foundMessages.map(m => m.userId),
+        ...foundDirectMessages.map(dm => dm.fromUserId),
+        ...foundDirectMessages.map(dm => dm.toUserId),
+      ].filter(Boolean);
 
       let messageUsers: any[] = [];
       if (userIds.length > 0) {
@@ -275,19 +287,21 @@ export function registerRoutes(app: Express): Server {
           .where(sql`id = ANY(ARRAY[${sql.join(userIds.map(String))}]::int[])`);
       }
 
-      console.log('Found users:', messageUsers);
-
       const messagesWithUsers = foundMessages.map(message => ({
         ...message,
         user: messageUsers.find(u => u.id === message.userId),
       }));
 
-      console.log('Final messages with users:', messagesWithUsers);
+      const directMessagesWithUsers = foundDirectMessages.map(dm => ({
+        ...dm,
+        fromUser: messageUsers.find(u => u.id === dm.fromUserId),
+        toUser: messageUsers.find(u => u.id === dm.toUserId),
+      }));
 
       res.json({
         channels: [],
         messages: messagesWithUsers,
-        directMessages: [],
+        directMessages: directMessagesWithUsers,
       });
     } catch (error) {
       console.error('Search error:', error);
