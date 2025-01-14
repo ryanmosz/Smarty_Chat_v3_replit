@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { db } from "@db";
 import { channels, messages, users, directMessages } from "@db/schema";
-import { eq, or } from "drizzle-orm";
+import { eq, or, sql, ilike } from "drizzle-orm";
 import { setupWebSocket } from "./websocket";
 import multer from "multer";
 import path from "path";
@@ -233,6 +233,80 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+
+  // Add search endpoint
+  app.get("/api/search", async (req, res) => {
+    try {
+      const query = req.query.q as string;
+      if (!query?.trim()) {
+        return res.json({ channels: [], messages: [], directMessages: [] });
+      }
+
+      const likeQuery = `%${query}%`;
+
+      // Search channels
+      const matchingChannels = await db
+        .select()
+        .from(channels)
+        .where(ilike(channels.name, likeQuery))
+        .catch(error => {
+          console.error('Error searching channels:', error);
+          return [];
+        });
+
+      // Search messages
+      const matchingMessages = await db.query.messages.findMany({
+        where: ilike(messages.content, likeQuery),
+        with: {
+          user: true,
+          channel: true
+        },
+        limit: 20
+      }).catch(error => {
+        console.error('Error searching messages:', error);
+        return [];
+      });
+
+      // Filter out messages with missing relationships
+      const validMessages = (matchingMessages || []).filter(msg => 
+        msg && msg.content && msg.user && msg.channel && 
+        msg.user.username && msg.channel.name
+      );
+
+      // Search direct messages
+      const matchingDirectMessages = await db.query.directMessages.findMany({
+        where: ilike(directMessages.content, likeQuery),
+        with: {
+          fromUser: true,
+          toUser: true
+        },
+        limit: 20
+      }).catch(error => {
+        console.error('Error searching direct messages:', error);
+        return [];
+      });
+
+      // Filter out direct messages with missing relationships
+      const validDirectMessages = (matchingDirectMessages || []).filter(dm => 
+        dm && dm.content && dm.fromUser && dm.toUser && 
+        dm.fromUser.username && dm.toUser.username
+      );
+
+      res.json({
+        channels: matchingChannels || [],
+        messages: validMessages,
+        directMessages: validDirectMessages
+      });
+    } catch (error) {
+      console.error('Error searching:', error);
+      res.status(500).json({ 
+        message: 'Failed to search',
+        channels: [],
+        messages: [],
+        directMessages: []
+      });
+    }
+  });
 
   // Clean up WebSocket server on process exit
   process.on('SIGTERM', () => {
