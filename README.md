@@ -18,6 +18,6 @@ REQUIREMENTS
 
 Limitations:
 
-1: there is no heartbeat system to check for user presence. Presence is only updated when the user updates it, or if they manually log out. 
+1: there is no heartbeat system to check for user presence. Presence is only updated when the user updates it, or if they manually log in or out. 
 
 2: there is an emoji picker attached to each message, but there will be a non fatal "error to add" when a user tries to add an emoji reaction to a message. 
