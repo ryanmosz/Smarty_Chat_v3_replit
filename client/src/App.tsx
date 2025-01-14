@@ -14,8 +14,8 @@ function Router() {
   const { user, isLoading } = useUser();
 
   useEffect(() => {
-    if (user) {
-      chatWs.connect();
+    if (user?.id) {
+      chatWs.connect(user.id);
       return () => chatWs.disconnect();
     }
   }, [user]);

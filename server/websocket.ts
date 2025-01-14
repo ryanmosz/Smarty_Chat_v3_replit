@@ -7,8 +7,12 @@ import { eq } from 'drizzle-orm';
 
 type WebSocketMessage = {
   type: 'message' | 'typing' | 'channel_created' | 'channel_deleted' | 'message_deleted' | 
-        'direct_message' | 'direct_message_deleted' | 'error';
+        'direct_message' | 'direct_message_deleted' | 'user_status' | 'error';
   payload: any;
+};
+
+type WebSocketClient = WebSocket & {
+  userId?: number;
 };
 
 export function setupWebSocket(server: Server) {
@@ -16,7 +20,7 @@ export function setupWebSocket(server: Server) {
     noServer: true 
   });
 
-  const clients = new Set<WebSocket>();
+  const clients = new Set<WebSocketClient>();
 
   server.on('upgrade', (request, socket, head) => {
     const { pathname, query } = parseUrl(request.url || '', true);
@@ -26,15 +30,40 @@ export function setupWebSocket(server: Server) {
     }
 
     if (query.type === 'chat') {
-      wss.handleUpgrade(request, socket, head, (ws) => {
-        wss.emit('connection', ws, request);
-      });
+      const userId = parseInt(query.userId as string);
+      if (!isNaN(userId)) {
+        wss.handleUpgrade(request, socket, head, (ws) => {
+          (ws as WebSocketClient).userId = userId;
+          wss.emit('connection', ws, request);
+        });
+      }
     }
   });
 
-  wss.on('connection', (ws: WebSocket, req) => {
-    console.log('Chat WebSocket client connected');
+  wss.on('connection', async (ws: WebSocketClient) => {
+    console.log('Chat WebSocket client connected, userId:', ws.userId);
     clients.add(ws);
+
+    // Update user status to online
+    if (ws.userId) {
+      try {
+        await db
+          .update(users)
+          .set({ status: 'online' })
+          .where(eq(users.id, ws.userId));
+
+        // Broadcast user status change
+        broadcast({
+          type: 'user_status',
+          payload: {
+            userId: ws.userId,
+            status: 'online'
+          }
+        });
+      } catch (error) {
+        console.error('Error updating user status:', error);
+      }
+    }
 
     ws.on('message', async (data: string) => {
       try {
@@ -207,9 +236,30 @@ export function setupWebSocket(server: Server) {
       clients.delete(ws);
     });
 
-    ws.on('close', () => {
-      console.log('WebSocket client disconnected');
+    ws.on('close', async () => {
+      console.log('WebSocket client disconnected, userId:', ws.userId);
       clients.delete(ws);
+
+      // Update user status to offline
+      if (ws.userId) {
+        try {
+          await db
+            .update(users)
+            .set({ status: 'offline' })
+            .where(eq(users.id, ws.userId));
+
+          // Broadcast user status change
+          broadcast({
+            type: 'user_status',
+            payload: {
+              userId: ws.userId,
+              status: 'offline'
+            }
+          });
+        } catch (error) {
+          console.error('Error updating user status:', error);
+        }
+      }
     });
   });
 

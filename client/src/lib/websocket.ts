@@ -7,15 +7,17 @@ class ChatWebSocket {
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000;
   private isConnecting = false;
+  private userId?: number;
 
-  connect() {
+  connect(userId: number) {
+    this.userId = userId;
     if (this.ws?.readyState === WebSocket.OPEN || this.isConnecting) {
       return;
     }
 
     this.isConnecting = true;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    this.ws = new WebSocket(`${protocol}//${window.location.host}?type=chat`);
+    this.ws = new WebSocket(`${protocol}//${window.location.host}?type=chat&userId=${userId}`);
 
     this.ws.onopen = () => {
       console.log('WebSocket connected');
@@ -43,7 +45,7 @@ class ChatWebSocket {
         setTimeout(() => {
           this.reconnectAttempts++;
           this.reconnectDelay *= 2; // Exponential backoff
-          this.connect();
+          this.connect(this.userId!);
         }, this.reconnectDelay);
       } else {
         console.error('Max reconnection attempts reached');
@@ -69,7 +71,7 @@ class ChatWebSocket {
     } else {
       console.warn('WebSocket not connected, message not sent:', message);
       // Attempt to reconnect
-      this.connect();
+      this.connect(this.userId!);
     }
   }
 

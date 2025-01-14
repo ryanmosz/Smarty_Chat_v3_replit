@@ -15,7 +15,7 @@ export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").unique().notNull(),
   password: text("password").notNull(),
-  status: text("status").default("active"),
+  status: text("status").default("offline"),
   avatarUrl: text("avatar_url"),
   avatarColor: text("avatar_color"),
   createdAt: timestamp("created_at").defaultNow(),

@@ -118,7 +118,14 @@ export function DirectMessageList({
                         className="w-full justify-start"
                         onClick={() => handleStartDM(user.id)}
                       >
-                        <UserIcon className="h-4 w-4 mr-2" />
+                        <div className="relative">
+                          <UserIcon className="h-4 w-4 mr-2" />
+                          <div 
+                            className={`absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full ${
+                              user.status === 'online' ? 'bg-green-500' : 'bg-gray-400'
+                            }`}
+                          />
+                        </div>
                         {user.username}
                       </Button>
                     ))
@@ -143,7 +150,14 @@ export function DirectMessageList({
                   className="w-full justify-start"
                   onClick={() => onUserSelect(user.id)}
                 >
-                  <UserIcon className="h-4 w-4 mr-2" />
+                  <div className="relative">
+                    <UserIcon className="h-4 w-4 mr-2" />
+                    <div 
+                      className={`absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full ${
+                        user.status === 'online' ? 'bg-green-500' : 'bg-gray-400'
+                      }`}
+                    />
+                  </div>
                   {user.username}
                 </Button>
               </div>
