@@ -47,16 +47,23 @@ export function setupWebSocket(server: Server) {
         switch (message.type) {
           case 'message':
             const { content, channelId, threadParentId, userId } = message.payload;
+            // First insert the new message
             const [newMessage] = await db
               .insert(messages)
-              .values({ content, channelId, threadParentId, userId })
+              .values({ 
+                content, 
+                channelId, 
+                threadParentId, // Ensure threadParentId is included
+                userId 
+              })
               .returning();
 
-            // Fetch the complete message with user data
+            // Then fetch the complete message with user data and thread relationship
             const [messageWithUser] = await db.query.messages.findMany({
               where: eq(messages.id, newMessage.id),
               with: {
-                user: true
+                user: true,
+                thread: true // Include thread relationship
               },
               limit: 1
             });
@@ -70,7 +77,6 @@ export function setupWebSocket(server: Server) {
               .delete(messages)
               .where(eq(messages.id, id));
 
-            // Broadcast deletion to all clients
             broadcast({ type: 'message_deleted', payload: { id } });
             break;
 

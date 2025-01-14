@@ -25,6 +25,7 @@ export function useChat() {
     return useQuery<Message[]>({
       queryKey: [`/api/messages/${messageId}/thread`],
       enabled: messageId > 0, // Only fetch when we have a valid message ID
+      select: (messages) => messages.filter(m => !m.isDeleted), // Filter out deleted messages
     });
   };
 
