@@ -105,43 +105,55 @@ const formatDate = (dateString: string | Date | null) => {
   }
 };
 
+// Updated ReactionList component to handle both emoji formats
 function ReactionList({ reactions }: { reactions: MessageWithUser['reactions'] }) {
   if (!reactions?.length) return null;
 
-  // Group reactions by emoji
+  // Group reactions by emoji or emojiId
   const groupedReactions = reactions.reduce((acc, reaction) => {
-    const key = reaction.emoji?.id || reaction.emoji || 'unknown';
+    let key;
+    let emojiDisplay;
+
+    if (reaction.emojiId && reaction.emoji) {
+      // New format with emoji object
+      key = `emoji_${reaction.emojiId}`;
+      emojiDisplay = reaction.emoji;
+    } else {
+      // Legacy format with emoji string
+      key = `legacy_${reaction.emoji}`;
+      emojiDisplay = { unicode: reaction.emoji };
+    }
+
     if (!acc[key]) {
       acc[key] = {
-        emoji: reaction.emoji,
+        emojiDisplay,
         count: 0,
-        users: new Set(),
+        users: new Set<string>(),
       };
     }
+
     acc[key].count++;
-    acc[key].users.add(reaction.user.username);
+    acc[key].users.add(reaction.user?.username || 'Unknown User');
     return acc;
-  }, {} as Record<string, { emoji: any; count: number; users: Set<string> }>);
+  }, {} as Record<string, { emojiDisplay: any; count: number; users: Set<string> }>);
 
   return (
     <div className="flex flex-wrap gap-1 mt-1">
-      {Object.values(groupedReactions).map(({ emoji, count, users }, index) => (
+      {Object.entries(groupedReactions).map(([key, { emojiDisplay, count, users }]) => (
         <div
-          key={index}
+          key={key}
           className="flex items-center gap-1 bg-accent/50 rounded-full px-2 py-0.5 text-sm"
           title={Array.from(users).join(', ')}
         >
-          {emoji?.unicode || emoji?.imageUrl ? (
-            emoji.unicode || (
+          <span className="min-w-[1rem] min-h-[1rem] flex items-center justify-center">
+            {emojiDisplay.unicode || (
               <img
-                src={emoji.imageUrl}
-                alt={emoji.shortcode}
+                src={emojiDisplay.imageUrl}
+                alt={emojiDisplay.shortcode}
                 className="w-4 h-4 object-contain"
               />
-            )
-          ) : (
-            emoji
-          )}
+            )}
+          </span>
           <span className="text-xs">{count}</span>
         </div>
       ))}
