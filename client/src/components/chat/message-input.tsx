@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Send, Paperclip } from "lucide-react";
+import { Send, Paperclip, Loader2 } from "lucide-react";
 import { useChat } from "@/hooks/use-chat";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/hooks/use-user";
@@ -15,6 +15,7 @@ interface MessageInputProps {
 export function MessageInput({ channelId, threadParentId }: MessageInputProps) {
   const [content, setContent] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const typingTimeoutRef = useRef<NodeJS.Timeout>();
   const { sendMessage } = useChat();
   const { toast } = useToast();
@@ -47,7 +48,6 @@ export function MessageInput({ channelId, threadParentId }: MessageInputProps) {
         content,
         channelId,
         threadParentId,
-        userId: user?.id,
       });
       setContent("");
     } catch (error) {
@@ -59,7 +59,7 @@ export function MessageInput({ channelId, threadParentId }: MessageInputProps) {
     }
   };
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -72,11 +72,45 @@ export function MessageInput({ channelId, threadParentId }: MessageInputProps) {
       return;
     }
 
-    // TODO: Implement file upload
-    toast({
-      title: "Coming Soon",
-      description: "File upload will be available soon!",
-    });
+    setIsUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('Upload failed');
+      }
+
+      const { url } = await response.json();
+      const fileMessage = `File shared: [${file.name}](${url})`;
+
+      await sendMessage.mutateAsync({
+        content: fileMessage,
+        channelId,
+        threadParentId,
+      });
+
+      toast({
+        title: "Success",
+        description: "File uploaded successfully",
+      });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to upload file",
+      });
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
   };
 
   return (
@@ -102,8 +136,13 @@ export function MessageInput({ channelId, threadParentId }: MessageInputProps) {
             variant="ghost"
             size="icon"
             onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading}
           >
-            <Paperclip className="h-5 w-5" />
+            {isUploading ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (
+              <Paperclip className="h-5 w-5" />
+            )}
           </Button>
           <Button variant="default" size="icon" onClick={handleSubmit}>
             <Send className="h-5 w-5" />

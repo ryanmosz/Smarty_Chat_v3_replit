@@ -4,6 +4,28 @@ import { db } from "@db";
 import { channels, messages, users } from "@db/schema";
 import { eq } from "drizzle-orm";
 import { setupWebSocket } from "./websocket";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
+import express from "express";
+
+// Ensure uploads directory exists
+const uploadsDir = path.join(process.cwd(), "uploads");
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+// Configure multer for file uploads
+const upload = multer({
+  dest: uploadsDir,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  },
+  fileFilter: (_req, file, cb) => {
+    // Accept all file types for now
+    cb(null, true);
+  },
+});
 
 export function registerRoutes(app: Express): Server {
   // Create HTTP server first
@@ -12,6 +34,19 @@ export function registerRoutes(app: Express): Server {
   // Setup WebSocket server
   const wss = setupWebSocket(httpServer);
   app.set('wss', wss);
+
+  // Serve uploaded files
+  app.use('/uploads', express.static(uploadsDir));
+
+  // File upload endpoint
+  app.post("/api/upload", upload.single('file'), (req, res) => {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+
+    const fileUrl = `/uploads/${req.file.filename}`;
+    res.json({ url: fileUrl });
+  });
 
   // Channel routes
   app.get("/api/channels", async (_req, res) => {
