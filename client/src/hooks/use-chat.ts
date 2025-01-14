@@ -17,12 +17,14 @@ export function useChat() {
   const queryClient = useQueryClient();
 
   // Channels
-  const { data: channels } = useQuery<Channel[]>({
+  const { data: channels = [] } = useQuery<Channel[]>({
     queryKey: ['/api/channels'],
   });
 
-  const { data: users } = useQuery<User[]>({
+  // Users
+  const { data: users = [] } = useQuery<User[]>({
     queryKey: ['/api/users'],
+    staleTime: 30000, // Cache for 30 seconds
   });
 
   // Channel Messages
@@ -109,37 +111,6 @@ export function useChat() {
       }
 
       return { optimisticMessage, tempId };
-    },
-    onSuccess: (_, variables, context) => {
-      if (!context) return;
-
-      const { tempId } = context;
-      const queryKey = variables.threadParentId 
-        ? [`/api/messages/${variables.threadParentId}/thread`]
-        : [`/api/channels/${variables.channelId}/messages`];
-
-      const messages = queryClient.getQueryData<MessageWithUser[]>(queryKey) || [];
-      queryClient.setQueryData<MessageWithUser[]>(
-        queryKey,
-        messages.filter(m => m.id !== tempId)
-      );
-    }
-  });
-
-  // Delete Message
-  const deleteMessage = useMutation({
-    mutationFn: (messageId: number) => {
-      return new Promise((resolve, reject) => {
-        try {
-          chatWs.send({
-            type: 'message_deleted',
-            payload: { id: messageId }
-          });
-          resolve(messageId);
-        } catch (error) {
-          reject(error);
-        }
-      });
     }
   });
 
@@ -175,23 +146,27 @@ export function useChat() {
     }
   });
 
-  // Delete Direct Message
-  const deleteDirectMessage = useMutation({
+  // Delete Message
+  const deleteMessage = useMutation({
     mutationFn: (messageId: number) => {
-      return new Promise((resolve, reject) => {
-        try {
-          chatWs.send({
-            type: 'direct_message_deleted',
-            payload: { id: messageId }
-          });
-          resolve(messageId);
-        } catch (error) {
-          reject(error);
-        }
+      chatWs.send({
+        type: 'message_deleted',
+        payload: { id: messageId }
       });
+      return Promise.resolve(messageId);
     }
   });
 
+  // Delete Direct Message
+  const deleteDirectMessage = useMutation({
+    mutationFn: (messageId: number) => {
+      chatWs.send({
+        type: 'direct_message_deleted',
+        payload: { id: messageId }
+      });
+      return Promise.resolve(messageId);
+    }
+  });
 
   // Subscribe to WebSocket updates
   React.useEffect(() => {
@@ -211,7 +186,7 @@ export function useChat() {
             if (!currentThreadMessages.some(m => m.id === message.payload.id)) {
               queryClient.setQueryData<MessageWithUser[]>(
                 threadQueryKey,
-                currentThreadMessages.filter(m => typeof m.id === 'number' && m.id < 0).concat(message.payload)
+                currentThreadMessages.filter(m => m.id < 0).concat(message.payload)
               );
             }
           } else {
@@ -221,29 +196,20 @@ export function useChat() {
             if (!currentMessages.some(m => m.id === message.payload.id)) {
               queryClient.setQueryData<MessageWithUser[]>(
                 msgChannelQueryKey,
-                currentMessages.filter(m => typeof m.id === 'number' && m.id < 0).concat(message.payload)
+                currentMessages.filter(m => m.id < 0).concat(message.payload)
               );
             }
           }
           break;
         }
         case 'message_deleted': {
-          const { id: deletedMessageId, channelId: deletedChannelId } = message.payload;
+          const { id: deletedMessageId, channelId } = message.payload;
+          const messagesQueryKey = [`/api/channels/${channelId}/messages`];
+          const messages = queryClient.getQueryData<MessageWithUser[]>(messagesQueryKey) || [];
 
-          // Update channel messages
-          const channelMessagesKey = [`/api/channels/${deletedChannelId}/messages`];
-          const channelMessages = queryClient.getQueryData<MessageWithUser[]>(channelMessagesKey) || [];
           queryClient.setQueryData<MessageWithUser[]>(
-            channelMessagesKey,
-            channelMessages.filter(m => m.id !== deletedMessageId)
-          );
-
-          // Update thread messages
-          const threadMessagesKey = [`/api/messages/${deletedMessageId}/thread`];
-          const threadMessages = queryClient.getQueryData<MessageWithUser[]>(threadMessagesKey) || [];
-          queryClient.setQueryData<MessageWithUser[]>(
-            threadMessagesKey,
-            threadMessages.filter(m => m.id !== deletedMessageId)
+            messagesQueryKey,
+            messages.filter(m => m.id !== deletedMessageId)
           );
           break;
         }
@@ -255,20 +221,9 @@ export function useChat() {
           if (!currentMessages.some(m => m.id === message.payload.id)) {
             queryClient.setQueryData<DirectMessageWithUser[]>(
               dmQueryKey,
-              currentMessages.filter(m => typeof m.id === 'number' && m.id < 0).concat(message.payload)
+              currentMessages.filter(m => m.id < 0).concat(message.payload)
             );
           }
-          break;
-        }
-        case 'direct_message_deleted': {
-          const { id: deletedMessageId, toUserId } = message.payload;
-          const dmQueryKey = [`/api/dm/${toUserId}`];
-          const messages = queryClient.getQueryData<DirectMessageWithUser[]>(dmQueryKey) || [];
-
-          queryClient.setQueryData<DirectMessageWithUser[]>(
-            dmQueryKey,
-            messages.filter(m => m.id !== deletedMessageId)
-          );
           break;
         }
       }
@@ -284,8 +239,8 @@ export function useChat() {
     getThreadMessages,
     getDirectMessages,
     sendMessage,
-    deleteMessage,
     sendDirectMessage,
+    deleteMessage,
     deleteDirectMessage,
   };
 }
