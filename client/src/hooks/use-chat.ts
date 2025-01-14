@@ -181,15 +181,15 @@ export function useChat() {
     }
   });
 
-  // Add Reaction
+  // Add Reaction - Updated to handle both emoji formats
   const addReaction = useMutation({
-    mutationFn: async ({ messageId, emojiId }: { messageId: number; emojiId: number }) => {
+    mutationFn: async ({ messageId, emojiId, emoji }: { messageId: number; emojiId?: number; emoji?: string }) => {
       const response = await fetch(`/api/messages/${messageId}/reactions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ emojiId }),
+        body: JSON.stringify(emojiId ? { emojiId } : { emoji }),
       });
 
       if (!response.ok) {

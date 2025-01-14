@@ -40,14 +40,23 @@ export function EmojiPicker({ messageId }: EmojiPickerProps) {
     },
   });
 
-  const handleEmojiClick = async (emoji: Emoji) => {
+  const handleEmojiClick = async (emoji: Emoji | string) => {
     if (!user) return;
 
     try {
-      await addReaction.mutateAsync({
-        messageId,
-        emojiId: emoji.id,
-      });
+      if (typeof emoji === 'string') {
+        // Handle legacy emoji format
+        await addReaction.mutateAsync({
+          messageId,
+          emoji: emoji,
+        });
+      } else {
+        // Handle new emoji format
+        await addReaction.mutateAsync({
+          messageId,
+          emojiId: emoji.id,
+        });
+      }
     } catch (error) {
       console.error('Error adding reaction:', error);
     }
@@ -101,13 +110,7 @@ export function EmojiPicker({ messageId }: EmojiPickerProps) {
                       key={emoji}
                       variant="ghost"
                       className="h-8 w-8 p-0"
-                      onClick={() => handleEmojiClick({ 
-                        id: 0,
-                        shortcode: emoji,
-                        unicode: emoji,
-                        isCustom: false,
-                        createdAt: new Date(),
-                      } as Emoji)}
+                      onClick={() => handleEmojiClick(emoji)}
                     >
                       {emoji}
                     </Button>
