@@ -203,6 +203,37 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Add new route for active conversations
+  app.get("/api/active-conversations", async (req, res) => {
+    try {
+      const allDirectMessages = await db.query.directMessages.findMany({
+        with: {
+          fromUser: true,
+          toUser: true
+        },
+        orderBy: (messages, { desc }) => [desc(messages.createdAt)],
+      });
+
+      // Get unique conversations (latest message for each user pair)
+      const conversationMap = new Map<string, any>(); // Type any is a placeholder,  replace with correct type if known.
+      allDirectMessages.forEach(dm => {
+        if (dm.fromUserId && dm.toUserId) { // Add null check for fromUserId and toUserId
+          const key = `${Math.min(dm.fromUserId, dm.toUserId)}-${Math.max(dm.fromUserId, dm.toUserId)}`;
+          if (!conversationMap.has(key) && !dm.isDeleted) {
+            conversationMap.set(key, dm);
+          }
+        }
+      });
+
+      const activeConversations = Array.from(conversationMap.values());
+      res.json(activeConversations);
+    } catch (error) {
+      console.error('Error fetching active conversations:', error);
+      res.status(500).json({ message: 'Failed to fetch active conversations' });
+    }
+  });
+
+
   // Clean up WebSocket server on process exit
   process.on('SIGTERM', () => {
     wss.close();

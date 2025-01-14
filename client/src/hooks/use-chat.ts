@@ -3,7 +3,6 @@ import { chatWs } from '../lib/websocket';
 import type { Channel, Message, DirectMessage, User } from '@db/schema';
 import React from 'react';
 
-// Extend Message type to include user information
 interface MessageWithUser extends Message {
   user?: User;
 }
@@ -27,12 +26,32 @@ export function useChat() {
     staleTime: 30000, // Cache for 30 seconds
   });
 
+  // Active DM Users (users with whom we have conversations)
+  const { data: activeConversations = [] } = useQuery<DirectMessageWithUser[]>({
+    queryKey: ['/api/active-conversations'],
+    select: (data) => {
+      if (!data) return [];
+      // Filter out deleted messages and get unique users
+      const activeMessages = data.filter(m => !m.isDeleted);
+      const uniqueUsers = new Set<string>();
+      return activeMessages.filter(msg => {
+        if (!msg.fromUser?.id || !msg.toUser?.id) return false;
+        const key = `${Math.min(msg.fromUser.id, msg.toUser.id)}-${Math.max(msg.fromUser.id, msg.toUser.id)}`;
+        if (!uniqueUsers.has(key)) {
+          uniqueUsers.add(key);
+          return true;
+        }
+        return false;
+      });
+    },
+  });
+
   // Channel Messages
   const getChannelMessages = (channelId: number) => {
     return useQuery<MessageWithUser[]>({
       queryKey: [`/api/channels/${channelId}/messages`],
-      select: (messages) => messages.filter(m => !m.threadParentId), // Only show root messages
-      enabled: channelId > 0, // Only fetch when we have a valid channel ID
+      select: (messages) => messages?.filter(m => !m.threadParentId && !m.isDeleted) || [],
+      enabled: channelId > 0,
     });
   };
 
@@ -40,8 +59,8 @@ export function useChat() {
   const getThreadMessages = (messageId: number) => {
     return useQuery<MessageWithUser[]>({
       queryKey: [`/api/messages/${messageId}/thread`],
-      enabled: messageId > 0, // Only fetch when we have a valid message ID
-      select: (messages) => messages.filter(m => !m.isDeleted), // Filter out deleted messages
+      enabled: messageId > 0,
+      select: (messages) => messages?.filter(m => !m.isDeleted) || [],
     });
   };
 
@@ -50,12 +69,12 @@ export function useChat() {
     return useQuery<DirectMessageWithUser[]>({
       queryKey: [`/api/dm/${userId}`],
       enabled: userId > 0,
-      select: (messages) => messages.filter(m => !m.isDeleted), // Filter out deleted messages
+      select: (messages) => messages?.filter(m => !m.isDeleted) || [],
     });
   };
 
   // Generate a temporary ID for optimistic updates
-  const generateTempId = () => -1 * Date.now(); // Use negative numbers for temp IDs
+  const generateTempId = () => -1 * Date.now();
 
   // Send Message
   const sendMessage = useMutation({
@@ -68,18 +87,10 @@ export function useChat() {
     },
     onMutate: async (newMessage) => {
       const tempId = generateTempId();
-
-      await queryClient.cancelQueries({ 
-        queryKey: [`/api/channels/${newMessage.channelId}/messages`] 
-      });
-
+      await queryClient.cancelQueries({ queryKey: [`/api/channels/${newMessage.channelId}/messages`] });
       if (newMessage.threadParentId) {
-        await queryClient.cancelQueries({ 
-          queryKey: [`/api/messages/${newMessage.threadParentId}/thread`] 
-        });
+        await queryClient.cancelQueries({ queryKey: [`/api/messages/${newMessage.threadParentId}/thread`] });
       }
-
-      // Create an optimistic message
       const optimisticMessage: MessageWithUser = {
         id: tempId,
         content: newMessage.content,
@@ -95,7 +106,6 @@ export function useChat() {
         const previousThreadMessages = queryClient.getQueryData<MessageWithUser[]>(
           [`/api/messages/${newMessage.threadParentId}/thread`]
         ) || [];
-
         queryClient.setQueryData<MessageWithUser[]>(
           [`/api/messages/${newMessage.threadParentId}/thread`],
           [...previousThreadMessages, optimisticMessage]
@@ -104,13 +114,11 @@ export function useChat() {
         const previousMessages = queryClient.getQueryData<MessageWithUser[]>(
           [`/api/channels/${newMessage.channelId}/messages`]
         ) || [];
-
         queryClient.setQueryData<MessageWithUser[]>(
           [`/api/channels/${newMessage.channelId}/messages`],
           [...previousMessages, optimisticMessage]
         );
       }
-
       return { optimisticMessage, tempId };
     }
   });
@@ -179,38 +187,30 @@ export function useChat() {
           break;
         case 'message': {
           const { channelId, threadParentId } = message.payload;
-
           if (threadParentId) {
-            queryClient.invalidateQueries({ 
-              queryKey: [`/api/messages/${threadParentId}/thread`] 
-            });
+            queryClient.invalidateQueries({ queryKey: [`/api/messages/${threadParentId}/thread`] });
           } else {
-            queryClient.invalidateQueries({ 
-              queryKey: [`/api/channels/${channelId}/messages`] 
-            });
+            queryClient.invalidateQueries({ queryKey: [`/api/channels/${channelId}/messages`] });
           }
           break;
         }
         case 'direct_message': {
           const { fromUserId, toUserId } = message.payload;
-          // Invalidate queries for both users involved
           queryClient.invalidateQueries({ queryKey: [`/api/dm/${fromUserId}`] });
           queryClient.invalidateQueries({ queryKey: [`/api/dm/${toUserId}`] });
+          queryClient.invalidateQueries({ queryKey: ['/api/active-conversations'] });
           break;
         }
         case 'message_deleted':
         case 'direct_message_deleted': {
           const { fromUserId, toUserId } = message.payload;
           if (fromUserId && toUserId) {
-            // DM deletion
             queryClient.invalidateQueries({ queryKey: [`/api/dm/${fromUserId}`] });
             queryClient.invalidateQueries({ queryKey: [`/api/dm/${toUserId}`] });
+            queryClient.invalidateQueries({ queryKey: ['/api/active-conversations'] });
           } else {
-            // Channel message deletion
             const { channelId } = message.payload;
-            queryClient.invalidateQueries({ 
-              queryKey: [`/api/channels/${channelId}/messages`] 
-            });
+            queryClient.invalidateQueries({ queryKey: [`/api/channels/${channelId}/messages`] });
           }
           break;
         }
@@ -223,6 +223,7 @@ export function useChat() {
   return {
     channels,
     users,
+    activeConversations,
     getChannelMessages,
     getThreadMessages,
     getDirectMessages,

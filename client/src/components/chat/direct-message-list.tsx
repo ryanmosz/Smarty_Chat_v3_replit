@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { MessageSquare, Plus, Trash2, ChevronDown, ChevronRight, UserIcon } from "lucide-react";
+import { Plus, ChevronDown, ChevronRight, UserIcon } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import type { User } from "@db/schema";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/hooks/use-user";
-import { chatWs } from "@/lib/websocket";
+import { useChat } from "@/hooks/use-chat";
 
 interface DirectMessageListProps {
   users: User[];
@@ -31,13 +31,22 @@ export function DirectMessageList({
   const [searchQuery, setSearchQuery] = useState("");
   const { toast } = useToast();
   const { user: currentUser } = useUser();
+  const { activeConversations } = useChat();
 
-  // Filter users excluding current user and matching search query
+  // Filter users for search dialog
   const filteredUsers = users
     .filter(u => u.id !== currentUser?.id)
     .filter(u => 
       u.username.toLowerCase().includes(searchQuery.toLowerCase())
     );
+
+  // Get users with active conversations
+  const activeUsers = users.filter(user => 
+    activeConversations.some(conv => 
+      (conv.fromUserId === user.id && conv.toUserId === currentUser?.id) ||
+      (conv.toUserId === user.id && conv.fromUserId === currentUser?.id)
+    )
+  );
 
   const handleStartDM = async (userId: number) => {
     if (isNaN(userId)) {
@@ -127,20 +136,18 @@ export function DirectMessageList({
       <div className={`flex-1 overflow-hidden transition-all duration-200 ${showDMs ? 'max-h-[calc(100vh-5rem)]' : 'max-h-0'}`}>
         <ScrollArea className="h-full">
           <div className="space-y-1 p-2">
-            {users
-              .filter(u => u.id !== currentUser?.id)
-              .map((user) => (
-                <div key={user.id} className="flex items-center gap-2 group">
-                  <Button
-                    variant={user.id === selectedUserId ? "secondary" : "ghost"}
-                    className="w-full justify-start"
-                    onClick={() => onUserSelect(user.id)}
-                  >
-                    <UserIcon className="h-4 w-4 mr-2" />
-                    {user.username}
-                  </Button>
-                </div>
-              ))}
+            {activeUsers.map((user) => (
+              <div key={user.id} className="flex items-center gap-2 group">
+                <Button
+                  variant={user.id === selectedUserId ? "secondary" : "ghost"}
+                  className="w-full justify-start"
+                  onClick={() => onUserSelect(user.id)}
+                >
+                  <UserIcon className="h-4 w-4 mr-2" />
+                  {user.username}
+                </Button>
+              </div>
+            ))}
           </div>
         </ScrollArea>
       </div>

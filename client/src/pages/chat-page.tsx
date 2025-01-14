@@ -5,7 +5,7 @@ import { DirectMessageList } from "@/components/chat/direct-message-list";
 import { MessageList } from "@/components/chat/message-list";
 import { MessageInput } from "@/components/chat/message-input";
 import { ChatHeader } from "@/components/chat/chat-header";
-import type { Message, DirectMessage } from "@db/schema";
+import type { Message } from "@db/schema";
 
 export default function ChatPage() {
   const [selectedChannelId, setSelectedChannelId] = useState<number>();
@@ -15,7 +15,7 @@ export default function ChatPage() {
     channels = [], 
     users = [], 
     getChannelMessages, 
-    getDirectMessages, 
+    getDirectMessages,
     getThreadMessages 
   } = useChat();
 
