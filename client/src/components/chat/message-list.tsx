@@ -3,14 +3,29 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageSquare, Trash2 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import type { Message } from "@db/schema";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import type { Message, User } from "@db/schema";
 import { useChat } from "@/hooks/use-chat";
 import { format } from "date-fns";
 import { useUser } from "@/hooks/use-user";
 
+interface MessageWithUser extends Message {
+  user?: User;
+}
+
 interface MessageListProps {
-  messages: Message[];
-  onThreadClick?: (message: Message) => void;
+  messages: MessageWithUser[];
+  onThreadClick?: (message: MessageWithUser) => void;
 }
 
 export function MessageList({ messages, onThreadClick }: MessageListProps) {
@@ -26,43 +41,10 @@ export function MessageList({ messages, onThreadClick }: MessageListProps) {
     await deleteMessage.mutateAsync(messageId);
   };
 
-  const renderContent = (content: string) => {
-    // Match markdown-style links: [text](url)
-    const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
-    const parts = content.split(linkRegex);
-
-    if (parts.length === 1) {
-      return content;
-    }
-
-    return parts.map((part, i) => {
-      if (i % 3 === 1) {
-        // This is the link text
-        const url = parts[i + 1];
-        return (
-          <a
-            key={i}
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-500 hover:underline"
-          >
-            {part}
-          </a>
-        );
-      } else if (i % 3 === 2) {
-        // This is the URL, skip it
-        return null;
-      }
-      return part;
-    });
-  };
-
   return (
     <ScrollArea className="flex-1 p-4">
       <div className="space-y-4">
         {messages.map((message) => {
-          // Safely access user properties with optional chaining
           const username = message.user?.username || 'Unknown';
           const avatarColor = message.user?.avatarColor || 'hsl(0, 0%, 90%)';
           const userInitials = username.slice(0, 2).toUpperCase();
@@ -91,7 +73,7 @@ export function MessageList({ messages, onThreadClick }: MessageListProps) {
                     {message.createdAt && format(new Date(message.createdAt), 'MMM d, h:mm a')}
                   </span>
                 </div>
-                <div className="mt-1">{renderContent(message.content)}</div>
+                <div className="mt-1">{message.content}</div>
                 <div className="mt-2 flex items-center gap-2">
                   {onThreadClick && (
                     <Button
@@ -104,17 +86,32 @@ export function MessageList({ messages, onThreadClick }: MessageListProps) {
                       Thread
                     </Button>
                   )}
-                  {/* Show delete button if user authored the message */}
-                  {user?.id === message.userId && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="opacity-0 group-hover:opacity-100 text-destructive"
-                      onClick={() => handleDelete(message.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  )}
+                  {/* Show delete button for all messages */}
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="opacity-0 group-hover:opacity-100 text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Message</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Are you sure you want to delete this message? This action cannot be undone.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => handleDelete(message.id)}>
+                          Delete
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </div>
               </div>
             </div>

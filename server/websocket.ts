@@ -6,7 +6,7 @@ import { parse as parseUrl } from 'url';
 import { eq } from 'drizzle-orm';
 
 type WebSocketMessage = {
-  type: 'message' | 'typing' | 'channel_created' | 'channel_deleted' | 'message_deleted' | 'reaction' | 'error';
+  type: 'message' | 'typing' | 'channel_created' | 'channel_deleted' | 'message_deleted' | 'error';
   payload: any;
 };
 
@@ -69,19 +69,31 @@ export function setupWebSocket(server: Server) {
           case 'message_deleted': {
             const { id } = message.payload;
             try {
+              // First check if the message exists
+              const [existingMessage] = await db.query.messages.findMany({
+                where: eq(messages.id, id),
+                limit: 1
+              });
+
+              if (!existingMessage) {
+                ws.send(JSON.stringify({ 
+                  type: 'error', 
+                  payload: 'Message not found' 
+                }));
+                return;
+              }
+
+              // Delete the message
               const [deletedMessage] = await db
                 .delete(messages)
                 .where(eq(messages.id, id))
                 .returning();
 
-              if (deletedMessage) {
-                broadcast({ type: 'message_deleted', payload: { id } });
-              } else {
-                ws.send(JSON.stringify({ 
-                  type: 'error', 
-                  payload: 'Message not found' 
-                }));
-              }
+              // Broadcast the deletion to all clients
+              broadcast({ 
+                type: 'message_deleted', 
+                payload: { id, channelId: deletedMessage.channelId } 
+              });
             } catch (error) {
               console.error('Error deleting message:', error);
               ws.send(JSON.stringify({ 
@@ -93,11 +105,16 @@ export function setupWebSocket(server: Server) {
           }
 
           case 'typing':
-          case 'reaction':
           case 'channel_created':
           case 'channel_deleted':
             broadcast(message);
             break;
+
+          default:
+            ws.send(JSON.stringify({ 
+              type: 'error', 
+              payload: 'Unknown message type' 
+            }));
         }
       } catch (error) {
         console.error('WebSocket message processing error:', error);

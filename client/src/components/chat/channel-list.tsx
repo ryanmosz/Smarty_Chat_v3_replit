@@ -8,6 +8,17 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,6 +26,7 @@ import { useState } from "react";
 import type { Channel } from "@db/schema";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/hooks/use-user";
+import { chatWs } from "@/lib/websocket";
 
 interface ChannelListProps {
   channels: Channel[];
@@ -89,6 +101,12 @@ export function ChannelList({
       if (selectedChannelId === channelId) {
         onChannelSelect(0);
       }
+
+      // Broadcast the channel deletion via WebSocket
+      chatWs.send({
+        type: 'channel_deleted',
+        payload: { id: channelId }
+      });
 
       toast({
         title: "Success",
@@ -181,16 +199,31 @@ export function ChannelList({
                   <Hash className="h-4 w-4 mr-2" />
                   {channel.name}
                 </Button>
-                {user?.id === channel.createdById && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="shrink-0 text-destructive opacity-0 group-hover:opacity-100 hover:text-destructive hover:bg-destructive/10"
-                    onClick={() => handleDeleteChannel(channel.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                )}
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="shrink-0 text-destructive opacity-0 group-hover:opacity-100 hover:text-destructive hover:bg-destructive/10"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete Channel</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Are you sure you want to delete this channel? This action cannot be undone and will delete all messages in this channel.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={() => handleDeleteChannel(channel.id)}>
+                        Delete
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             ))}
           </div>
