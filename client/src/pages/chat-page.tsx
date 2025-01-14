@@ -12,9 +12,7 @@ export default function ChatPage() {
   const [threadMessage, setThreadMessage] = useState<Message>();
   const { channels = [], getChannelMessages, getThreadMessages } = useChat();
   const { data: channelMessages = [] } = getChannelMessages(selectedChannelId || 0);
-  const { data: threadMessages = [] } = threadMessage 
-    ? getThreadMessages(threadMessage.id)
-    : { data: undefined };
+  const { data: threadMessages = [] } = getThreadMessages(threadMessage?.id || 0);
 
   const displayMessages = threadMessage ? threadMessages : channelMessages;
 
