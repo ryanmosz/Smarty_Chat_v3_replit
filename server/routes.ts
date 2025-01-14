@@ -244,12 +244,7 @@ export function registerRoutes(app: Express): Server {
 
       console.log('Search query:', query);
 
-      // Split query into words and create LIKE patterns
-      const searchWords = query.trim().toLowerCase().split(/\s+/);
-      console.log('Search words:', searchWords);
-
-      const likePatterns = searchWords.map(word => `%${word}%`);
-      console.log('Like patterns:', likePatterns);
+      const likePattern = `%${query.toLowerCase()}%`;
 
       // Search channels
       const foundChannels = await db
@@ -259,8 +254,10 @@ export function registerRoutes(app: Express): Server {
           description: channels.description
         })
         .from(channels)
-        .where(sql`(${channels.name} ILIKE ANY (${sql.array(likePatterns, 'text')}) OR 
-                   ${channels.description} ILIKE ANY (${sql.array(likePatterns, 'text')}))`)
+        .where(or(
+          ilike(channels.name, likePattern),
+          ilike(channels.description || '', likePattern)
+        ))
         .orderBy(channels.name)
         .limit(5);
 
@@ -276,7 +273,7 @@ export function registerRoutes(app: Express): Server {
           userId: messages.userId
         })
         .from(messages)
-        .where(sql`${messages.content} ILIKE ANY (${sql.array(likePatterns, 'text')})`)
+        .where(ilike(messages.content, likePattern))
         .orderBy(sql`${messages.createdAt} DESC`)
         .limit(5);
 
@@ -290,7 +287,7 @@ export function registerRoutes(app: Express): Server {
         ? await db
             .select()
             .from(users)
-            .where(sql`${users.id} = ANY(${sql.array(userIds, 'int4')})`)
+            .where(eq(users.id, userIds[0])) 
         : [];
 
       console.log('Message users:', messageUsers);
@@ -310,23 +307,22 @@ export function registerRoutes(app: Express): Server {
           toUserId: directMessages.toUserId
         })
         .from(directMessages)
-        .where(sql`${directMessages.content} ILIKE ANY (${sql.array(likePatterns, 'text')})`)
+        .where(ilike(directMessages.content, likePattern))
         .orderBy(sql`${directMessages.createdAt} DESC`)
         .limit(5);
 
       console.log('Found direct messages:', foundDirectMessages);
 
-      // Get user data for direct messages
-      const dmUserIds = [...new Set([
-        ...foundDirectMessages.map(dm => dm.fromUserId),
-        ...foundDirectMessages.map(dm => dm.toUserId)
-      ])].filter((id): id is number => id != null);
+      const dmUserIds = foundDirectMessages.flatMap(dm => [
+        dm.fromUserId,
+        dm.toUserId
+      ]).filter((id): id is number => id != null);
 
       const dmUsers = dmUserIds.length > 0
         ? await db
             .select()
             .from(users)
-            .where(sql`${users.id} = ANY(${sql.array(dmUserIds, 'int4')})`)
+            .where(eq(users.id, dmUserIds[0])) 
         : [];
 
       const directMessagesWithUsers = foundDirectMessages.map(dm => ({
