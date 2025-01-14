@@ -311,6 +311,9 @@ export function registerRoutes(app: Express): Server {
       const { emoji } = req.body;
       const userId = req.user?.id;
 
+      // Debug logs
+      console.log('Reaction request:', { messageId, emoji, userId });
+
       if (!userId) {
         return res.status(401).json({ message: 'Authentication required' });
       }
@@ -358,7 +361,11 @@ export function registerRoutes(app: Express): Server {
         },
       });
 
-      // Broadcast reaction update
+      // Debug log
+      console.log('Created reaction:', fullReaction);
+
+      // Broadcast reaction update with channel info
+      const wss = req.app.get('wss');
       wss.broadcast({
         type: 'reaction',
         payload: {

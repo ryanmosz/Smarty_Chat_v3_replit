@@ -7,7 +7,7 @@ import { eq } from 'drizzle-orm';
 
 type WebSocketMessage = {
   type: 'message' | 'typing' | 'channel_created' | 'channel_deleted' | 'message_deleted' | 
-        'direct_message' | 'direct_message_deleted' | 'user_status' | 'error' | 'reaction' | 'reaction_update';
+         'direct_message' | 'direct_message_deleted' | 'user_status' | 'error' | 'reaction' | 'reaction_update';
   payload: any;
 };
 
@@ -129,8 +129,9 @@ export function setupWebSocket(server: Server) {
 
           case 'reaction': {
             const { messageId, emoji, channelId, threadParentId } = message.payload;
+            console.log('Broadcasting reaction:', { messageId, emoji, channelId, threadParentId });
             broadcast({
-              type: 'reaction_update',
+              type: 'reaction',
               payload: { messageId, emoji, channelId, threadParentId }
             });
             break;
