@@ -214,6 +214,17 @@ export function useChat() {
           }
           break;
         }
+        case 'user_status': {
+          const { userId, status } = message.payload;
+          // Update the user's status in the cache
+          queryClient.setQueryData<User[]>(['/api/users'], (oldUsers) => {
+            if (!oldUsers) return oldUsers;
+            return oldUsers.map(user =>
+              user.id === userId ? { ...user, status } : user
+            );
+          });
+          break;
+        }
       }
     });
 
