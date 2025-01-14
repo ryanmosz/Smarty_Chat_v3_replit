@@ -48,6 +48,9 @@ export const messages = pgTable("messages", {
   isDeleted: boolean("is_deleted").default(false),
 }, (table) => ({
   contentSearchIdx: index("message_content_search_idx").on(table.content),
+  contentTsIdx: index("message_content_ts_idx").on(
+    sql`to_tsvector('english', ${table.content})`
+  ),
 }));
 
 // Direct Messages table

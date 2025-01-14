@@ -234,7 +234,7 @@ export function registerRoutes(app: Express): Server {
   });
 
 
-  // Add more detailed logging to the search endpoint
+  // Search endpoint
   app.get("/api/search", async (req, res) => {
     try {
       const query = req.query.q as string;
@@ -245,12 +245,7 @@ export function registerRoutes(app: Express): Server {
 
       console.log('Processing search query:', query);
 
-      // Simple text search with LIKE operator
-      const searchPattern = `%${query.toLowerCase()}%`;
-      console.log('Using search pattern:', searchPattern);
-
-      // Search messages with simple LIKE query and log the query
-      console.log('Executing search query...');
+      // Use both full-text search and LIKE for better results
       const foundMessages = await db
         .select({
           id: messages.id,
@@ -260,7 +255,10 @@ export function registerRoutes(app: Express): Server {
           createdAt: messages.createdAt,
         })
         .from(messages)
-        .where(sql`LOWER(content) LIKE ${searchPattern}`);
+        .where(sql`
+          to_tsvector('english', content) @@ plainto_tsquery('english', ${query})
+          OR LOWER(content) LIKE ${`%${query.toLowerCase()}%`}
+        `);
 
       console.log('Search query results:', foundMessages.length, 'messages found');
       console.log('Sample results:', foundMessages.slice(0, 2));

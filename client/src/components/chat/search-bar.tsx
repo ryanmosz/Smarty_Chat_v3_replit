@@ -56,14 +56,9 @@ export function SearchBar() {
       return data;
     },
     enabled: debouncedQuery.trim().length >= 2,
-    staleTime: 1000, // Reduce stale time to ensure fresher results
+    staleTime: 0, // Always fetch fresh results
     retry: 1,
-    initialData: { channels: [], messages: [], directMessages: [] }
   });
-
-  const hasResults = searchResults && (
-    searchResults.messages?.length > 0
-  );
 
   const handleMessageClick = (channelId: number, messageId: number) => {
     console.log('Navigating to message:', { channelId, messageId });
@@ -71,6 +66,17 @@ export function SearchBar() {
     setShowResults(false);
     setQuery("");
   };
+
+  // Debug log whenever search results change
+  useEffect(() => {
+    if (searchResults) {
+      console.log('Current search results:', {
+        query: debouncedQuery,
+        messageCount: searchResults.messages?.length,
+        messages: searchResults.messages
+      });
+    }
+  }, [searchResults, debouncedQuery]);
 
   return (
     <div className="relative flex items-center gap-2">
@@ -91,11 +97,14 @@ export function SearchBar() {
         </div>
       </div>
 
-      {showResults && (
+      {showResults && debouncedQuery.trim().length >= 2 && (
         <div className="absolute top-full mt-2 left-0 w-96 bg-background border rounded-md shadow-lg p-4 space-y-4 z-50">
           <ScrollArea className="max-h-[480px]">
-            {/* Messages */}
-            {searchResults?.messages?.length > 0 ? (
+            {isLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : searchResults?.messages?.length > 0 ? (
               <div>
                 <h3 className="font-semibold mb-2 text-sm">Messages</h3>
                 <div className="space-y-2">
@@ -129,7 +138,7 @@ export function SearchBar() {
               </div>
             ) : (
               <div className="text-sm text-muted-foreground text-center py-4">
-                {query.length < 2 ? 'Type to search...' : `No results found for "${query}"`}
+                {debouncedQuery.length < 2 ? 'Type to search...' : `No results found for "${debouncedQuery}"`}
               </div>
             )}
           </ScrollArea>
