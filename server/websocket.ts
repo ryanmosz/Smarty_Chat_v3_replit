@@ -74,11 +74,24 @@ export function setupWebSocket(server: Server) {
 
           case 'message_deleted': {
             const { id } = message.payload;
-            await db
-              .delete(messages)
-              .where(eq(messages.id, id));
+            try {
+              // Delete the message from the database
+              const [deletedMessage] = await db
+                .delete(messages)
+                .where(eq(messages.id, id))
+                .returning();
 
-            broadcast({ type: 'message_deleted', payload: { id } });
+              if (deletedMessage) {
+                // Only broadcast if deletion was successful
+                broadcast({ type: 'message_deleted', payload: { id } });
+              }
+            } catch (error) {
+              console.error('Error deleting message:', error);
+              ws.send(JSON.stringify({ 
+                type: 'error', 
+                payload: 'Failed to delete message' 
+              }));
+            }
             break;
           }
 

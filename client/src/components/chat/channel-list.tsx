@@ -48,7 +48,11 @@ export function ChannelList({
       const response = await fetch("/api/channels", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, description }),
+        body: JSON.stringify({ 
+          name, 
+          description,
+          createdById: user?.id 
+        }),
       });
 
       if (!response.ok) {
@@ -168,7 +172,7 @@ export function ChannelList({
         <ScrollArea className="h-full">
           <div className="space-y-1 p-2">
             {channels.map((channel) => (
-              <div key={channel.id} className="flex items-center gap-2">
+              <div key={channel.id} className="flex items-center gap-2 group">
                 <Button
                   variant={channel.id === selectedChannelId ? "secondary" : "ghost"}
                   className="w-full justify-start"
@@ -181,7 +185,7 @@ export function ChannelList({
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    className="shrink-0 text-destructive opacity-0 group-hover:opacity-100 hover:text-destructive hover:bg-destructive/10"
                     onClick={() => handleDeleteChannel(channel.id)}
                   >
                     <Trash2 className="h-4 w-4" />
