@@ -1,19 +1,17 @@
 import { useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { MessageSquare, FileIcon } from "lucide-react";
+import { MessageSquare } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import type { Message, User, Reaction, Emoji } from "@db/schema";
+import type { Message, User, Reaction } from "@db/schema";
 import { format } from "date-fns";
 import { useUser } from "@/hooks/use-user";
 import { EmojiPicker } from "./emoji-picker";
-import { useQuery } from "@tanstack/react-query";
 
 interface MessageWithUser extends Message {
   user?: User;
   reactions?: (Reaction & {
     user: User;
-    emoji?: Emoji;
   })[];
 }
 
@@ -56,7 +54,7 @@ function renderMessageContent(content: string): React.ReactNode {
             rel="noopener noreferrer"
             className="text-blue-500 hover:text-blue-700 inline-flex items-center gap-1"
           >
-            <FileIcon className="h-4 w-4" />
+            <img src="/file-icon.svg" alt="File" className="h-4 w-4"/> {/*Replaced FileIcon*/}
             {text}
           </a>
         );
@@ -105,54 +103,35 @@ const formatDate = (dateString: string | Date | null) => {
   }
 };
 
-// Updated ReactionList component to handle both emoji formats
+// Updated ReactionList component to handle simplified emoji format
 function ReactionList({ reactions }: { reactions: MessageWithUser['reactions'] }) {
   if (!reactions?.length) return null;
 
-  // Group reactions by emoji or emojiId
+  // Group reactions by emoji
   const groupedReactions = reactions.reduce((acc, reaction) => {
-    let key;
-    let emojiDisplay;
-
-    if (reaction.emojiId && reaction.emoji) {
-      // New format with emoji object
-      key = `emoji_${reaction.emojiId}`;
-      emojiDisplay = reaction.emoji;
-    } else {
-      // Legacy format with emoji string
-      key = `legacy_${reaction.emoji}`;
-      emojiDisplay = { unicode: reaction.emoji };
-    }
-
+    const key = reaction.emoji;
     if (!acc[key]) {
       acc[key] = {
-        emojiDisplay,
+        emoji: reaction.emoji,
         count: 0,
         users: new Set<string>(),
       };
     }
-
     acc[key].count++;
     acc[key].users.add(reaction.user?.username || 'Unknown User');
     return acc;
-  }, {} as Record<string, { emojiDisplay: any; count: number; users: Set<string> }>);
+  }, {} as Record<string, { emoji: string; count: number; users: Set<string> }>);
 
   return (
     <div className="flex flex-wrap gap-1 mt-1">
-      {Object.entries(groupedReactions).map(([key, { emojiDisplay, count, users }]) => (
+      {Object.entries(groupedReactions).map(([key, { emoji, count, users }]) => (
         <div
           key={key}
           className="flex items-center gap-1 bg-accent/50 rounded-full px-2 py-0.5 text-sm"
           title={Array.from(users).join(', ')}
         >
           <span className="min-w-[1rem] min-h-[1rem] flex items-center justify-center">
-            {emojiDisplay.unicode || (
-              <img
-                src={emojiDisplay.imageUrl}
-                alt={emojiDisplay.shortcode}
-                className="w-4 h-4 object-contain"
-              />
-            )}
+            {emoji}
           </span>
           <span className="text-xs">{count}</span>
         </div>

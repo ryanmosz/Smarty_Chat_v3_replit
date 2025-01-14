@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { db } from "@db";
-import { channels, messages, users, directMessages, emojis, emojiCategories, reactions } from "@db/schema";
+import { channels, messages, users, directMessages, reactions } from "@db/schema";
 import { eq, or, sql, and, desc } from "drizzle-orm";
 import { setupWebSocket } from "./websocket";
 import multer from "multer";
@@ -304,93 +304,19 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // New Emoji Category Routes
-  app.get("/api/emoji-categories", async (_req, res) => {
-    try {
-      const categories = await db.query.emojiCategories.findMany({
-        with: {
-          emojis: true,
-        },
-        orderBy: (categories) => [categories.displayOrder],
-      });
-      res.json(categories);
-    } catch (error) {
-      console.error('Error fetching emoji categories:', error);
-      res.status(500).json({ message: 'Failed to fetch emoji categories' });
-    }
-  });
-
-  app.post("/api/emoji-categories", async (req, res) => {
-    try {
-      const { name, description, displayOrder } = req.body;
-      const [category] = await db.insert(emojiCategories)
-        .values({ name, description, displayOrder })
-        .returning();
-      res.json(category);
-    } catch (error) {
-      console.error('Error creating emoji category:', error);
-      res.status(500).json({ message: 'Failed to create emoji category' });
-    }
-  });
-
-  // Emoji Routes
-  app.get("/api/emojis", async (req, res) => {
-    try {
-      const allEmojis = await db.query.emojis.findMany({
-        with: {
-          category: true,
-          createdBy: {
-            columns: {
-              id: true,
-              username: true,
-              avatarUrl: true,
-            },
-          },
-        },
-      });
-      res.json(allEmojis);
-    } catch (error) {
-      console.error('Error fetching emojis:', error);
-      res.status(500).json({ message: 'Failed to fetch emojis' });
-    }
-  });
-
-  app.post("/api/emojis", upload.single('emoji'), async (req, res) => {
-    try {
-      const { shortcode, unicode, categoryId } = req.body;
-      const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
-
-      if (!shortcode) {
-        return res.status(400).json({ message: 'Shortcode is required' });
-      }
-
-      const [emoji] = await db.insert(emojis)
-        .values({
-          shortcode,
-          unicode,
-          imageUrl,
-          categoryId: categoryId ? parseInt(categoryId) : null,
-          isCustom: !!imageUrl,
-          createdById: req.user?.id,
-        })
-        .returning();
-
-      res.json(emoji);
-    } catch (error) {
-      console.error('Error creating emoji:', error);
-      res.status(500).json({ message: 'Failed to create emoji' });
-    }
-  });
-
-  // Enhanced Reaction Routes
+  // Reaction endpoints
   app.post("/api/messages/:messageId/reactions", async (req, res) => {
     try {
       const messageId = parseInt(req.params.messageId);
-      const { emojiId, emoji: legacyEmoji } = req.body;
+      const { emoji } = req.body;
       const userId = req.user?.id;
 
       if (!userId) {
         return res.status(401).json({ message: 'Authentication required' });
+      }
+
+      if (!emoji) {
+        return res.status(400).json({ message: 'Emoji is required' });
       }
 
       // Check if the message exists
@@ -407,7 +333,7 @@ export function registerRoutes(app: Express): Server {
         where: and(
           eq(reactions.messageId, messageId),
           eq(reactions.userId, userId),
-          emojiId ? eq(reactions.emojiId, emojiId) : eq(reactions.emoji, legacyEmoji)
+          eq(reactions.emoji, emoji)
         ),
       });
 
@@ -420,17 +346,15 @@ export function registerRoutes(app: Express): Server {
         .values({
           messageId,
           userId,
-          emojiId,
-          emoji: !emojiId ? legacyEmoji : undefined, // Support legacy emoji format
+          emoji,
         })
         .returning();
 
-      // Get full reaction data with user and emoji info
+      // Get full reaction data with user info
       const fullReaction = await db.query.reactions.findFirst({
         where: eq(reactions.id, reaction.id),
         with: {
           user: true,
-          emoji: true,
         },
       });
 

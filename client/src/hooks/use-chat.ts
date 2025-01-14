@@ -1,13 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { chatWs } from '../lib/websocket';
-import type { Channel, Message, DirectMessage, User, Reaction, Emoji } from '@db/schema';
+import type { Channel, Message, DirectMessage, User, Reaction } from '@db/schema';
 import React from 'react';
 
 interface MessageWithUser extends Message {
   user?: User;
   reactions?: (Reaction & {
     user: User;
-    emoji?: Emoji;
   })[];
 }
 
@@ -183,15 +182,15 @@ export function useChat() {
 
   // Add Reaction - Updated with improved error handling and optimistic updates
   const addReaction = useMutation({
-    mutationFn: async ({ messageId, emojiId, emoji }: { messageId: number; emojiId?: number; emoji?: string }) => {
-      console.log('Sending reaction request:', { messageId, emojiId, emoji }); // Debug log
+    mutationFn: async ({ messageId, emoji }: { messageId: number; emoji: string }) => {
+      console.log('Sending reaction request:', { messageId, emoji }); // Debug log
 
       const response = await fetch(`/api/messages/${messageId}/reactions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(emojiId ? { emojiId } : { emoji }),
+        body: JSON.stringify({ emoji }),
       });
 
       if (!response.ok) {
@@ -222,9 +221,11 @@ export function useChat() {
       console.log('Reaction added successfully:', data); // Debug log
 
       // Update both channel messages and thread messages
-      queryClient.invalidateQueries({ 
-        queryKey: [`/api/channels/${data.channelId}/messages`],
-      });
+      if (data.channelId) {
+        queryClient.invalidateQueries({ 
+          queryKey: [`/api/channels/${data.channelId}/messages`],
+        });
+      }
 
       if (data.threadParentId) {
         queryClient.invalidateQueries({ 
@@ -247,7 +248,7 @@ export function useChat() {
     },
     onSuccess: (_, variables) => {
       // Optimistically update the UI
-      const { messageId, reactionId } = variables;
+      const { messageId } = variables;
 
       queryClient.invalidateQueries({ 
         queryKey: [`/api/messages/${messageId}`],
@@ -270,6 +271,16 @@ export function useChat() {
             queryClient.invalidateQueries({ queryKey: [`/api/messages/${threadParentId}/thread`] });
           } else {
             queryClient.invalidateQueries({ queryKey: [`/api/channels/${channelId}/messages`] });
+          }
+          break;
+        }
+        case 'reaction_update': {
+          const { channelId, threadParentId } = message.payload;
+          if (channelId) {
+            queryClient.invalidateQueries({ queryKey: [`/api/channels/${channelId}/messages`] });
+          }
+          if (threadParentId) {
+            queryClient.invalidateQueries({ queryKey: [`/api/messages/${threadParentId}/thread`] });
           }
           break;
         }

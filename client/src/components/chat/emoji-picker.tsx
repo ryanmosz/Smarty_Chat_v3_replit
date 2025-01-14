@@ -4,19 +4,21 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Smile, Loader2 } from "lucide-react";
 import { useChat } from "@/hooks/use-chat";
 import { useUser } from "@/hooks/use-user";
 import { useToast } from "@/hooks/use-toast";
-import { useQuery } from "@tanstack/react-query";
-import type { Emoji, EmojiCategory } from "@db/schema";
 import { useState } from "react";
 
 interface EmojiPickerProps {
   messageId: number;
 }
+
+// Basic set of commonly used emojis
+const BASIC_EMOJIS = [
+  "👍", "❤️", "😊", "🎉", "🚀", "👋", "🔥", "✨",
+  "👀", "💯", "⭐", "🌟", "👏", "🙌", "💪", "🤝"
+];
 
 export function EmojiPicker({ messageId }: EmojiPickerProps) {
   const { addReaction } = useChat();
@@ -25,27 +27,7 @@ export function EmojiPicker({ messageId }: EmojiPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Fetch emoji categories with their emojis
-  const { data: categories = [] } = useQuery<(EmojiCategory & { emojis: Emoji[] })[]>({
-    queryKey: ['/api/emoji-categories'],
-    queryFn: async () => {
-      const response = await fetch('/api/emoji-categories');
-      if (!response.ok) throw new Error('Failed to fetch emoji categories');
-      return response.json();
-    },
-  });
-
-  // Fetch all emojis (including custom ones)
-  const { data: allEmojis = [] } = useQuery<Emoji[]>({
-    queryKey: ['/api/emojis'],
-    queryFn: async () => {
-      const response = await fetch('/api/emojis');
-      if (!response.ok) throw new Error('Failed to fetch emojis');
-      return response.json();
-    },
-  });
-
-  const handleEmojiClick = async (emoji: Emoji | string) => {
+  const handleEmojiClick = async (emoji: string) => {
     if (!user) {
       toast({
         variant: "destructive",
@@ -59,19 +41,10 @@ export function EmojiPicker({ messageId }: EmojiPickerProps) {
 
     setIsSubmitting(true);
     try {
-      if (typeof emoji === 'string') {
-        // Handle legacy emoji format
-        await addReaction.mutateAsync({
-          messageId,
-          emoji,
-        });
-      } else {
-        // Handle new emoji format
-        await addReaction.mutateAsync({
-          messageId,
-          emojiId: emoji.id,
-        });
-      }
+      await addReaction.mutateAsync({
+        messageId,
+        emoji,
+      });
 
       toast({
         description: "Reaction added successfully",
@@ -90,9 +63,6 @@ export function EmojiPicker({ messageId }: EmojiPickerProps) {
     }
   };
 
-  // Fallback emojis if API fails
-  const fallbackEmojis = ["👍", "❤️", "🎉", "🚀", "👋", "😊", "🔥", "✨"];
-
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
@@ -109,80 +79,20 @@ export function EmojiPicker({ messageId }: EmojiPickerProps) {
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-80" align="start">
-        <Tabs defaultValue="all">
-          <TabsList className="w-full">
-            <TabsTrigger value="all">All</TabsTrigger>
-            {categories.map((category) => (
-              <TabsTrigger key={category.id} value={category.id.toString()}>
-                {category.name}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-
-          <ScrollArea className="h-[300px] mt-2">
-            <TabsContent value="all" className="m-0">
-              <div className="grid grid-cols-8 gap-2 p-2">
-                {allEmojis.length > 0 ? (
-                  allEmojis.map((emoji) => (
-                    <Button
-                      key={emoji.id}
-                      variant="ghost"
-                      className="h-8 w-8 p-0 hover:bg-accent/50"
-                      onClick={() => handleEmojiClick(emoji)}
-                      disabled={isSubmitting}
-                    >
-                      {emoji.unicode || (
-                        <img 
-                          src={emoji.imageUrl || ''} 
-                          alt={emoji.shortcode}
-                          className="w-6 h-6 object-contain"
-                        />
-                      )}
-                    </Button>
-                  ))
-                ) : (
-                  // Fallback to basic emojis if API fails
-                  fallbackEmojis.map((emoji) => (
-                    <Button
-                      key={emoji}
-                      variant="ghost"
-                      className="h-8 w-8 p-0 hover:bg-accent/50"
-                      onClick={() => handleEmojiClick(emoji)}
-                      disabled={isSubmitting}
-                    >
-                      {emoji}
-                    </Button>
-                  ))
-                )}
-              </div>
-            </TabsContent>
-
-            {categories.map((category) => (
-              <TabsContent key={category.id} value={category.id.toString()} className="m-0">
-                <div className="grid grid-cols-8 gap-2 p-2">
-                  {category.emojis.map((emoji) => (
-                    <Button
-                      key={emoji.id}
-                      variant="ghost"
-                      className="h-8 w-8 p-0 hover:bg-accent/50"
-                      onClick={() => handleEmojiClick(emoji)}
-                      disabled={isSubmitting}
-                    >
-                      {emoji.unicode || (
-                        <img 
-                          src={emoji.imageUrl || ''} 
-                          alt={emoji.shortcode}
-                          className="w-6 h-6 object-contain"
-                        />
-                      )}
-                    </Button>
-                  ))}
-                </div>
-              </TabsContent>
-            ))}
-          </ScrollArea>
-        </Tabs>
+      <PopoverContent className="w-64" align="start">
+        <div className="grid grid-cols-8 gap-2 p-2">
+          {BASIC_EMOJIS.map((emoji) => (
+            <Button
+              key={emoji}
+              variant="ghost"
+              className="h-8 w-8 p-0 hover:bg-accent/50"
+              onClick={() => handleEmojiClick(emoji)}
+              disabled={isSubmitting}
+            >
+              {emoji}
+            </Button>
+          ))}
+        </div>
       </PopoverContent>
     </Popover>
   );
