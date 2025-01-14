@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, index } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { relations } from "drizzle-orm";
 import { z } from "zod";
@@ -65,14 +65,46 @@ export const directMessages = pgTable("direct_messages", {
   contentSearchIdx: index("dm_content_search_idx").on(table.content),
 }));
 
-// Message Reactions table
+// Emoji Categories table
+export const emojiCategories = pgTable("emoji_categories", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  displayOrder: integer("display_order").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Emojis table
+export const emojis = pgTable("emojis", {
+  id: serial("id").primaryKey(),
+  shortcode: text("shortcode").unique().notNull(),
+  unicode: text("unicode"),
+  imageUrl: text("image_url"),
+  categoryId: integer("category_id").references(() => emojiCategories.id),
+  isCustom: boolean("is_custom").default(false).notNull(),
+  createdById: integer("created_by_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  shortcodeIdx: index("emoji_shortcode_idx").on(table.shortcode),
+}));
+
+// Message Reactions table (enhanced)
 export const reactions = pgTable("reactions", {
   id: serial("id").primaryKey(),
   messageId: integer("message_id").references(() => messages.id),
   userId: integer("user_id").references(() => users.id),
-  emoji: text("emoji").notNull(),
+  emojiId: integer("emoji_id").references(() => emojis.id),
+  emoji: text("emoji"), // Kept for backward compatibility
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => ({
+  // Ensure unique reactions per user/message/emoji combination
+  uniqueReactionIdx: uniqueIndex("unique_reaction_idx").on(
+    table.messageId,
+    table.userId,
+    table.emojiId
+  ),
+}));
 
 // Relations
 export const userRelations = relations(users, ({ many }) => ({
@@ -117,6 +149,24 @@ export const directMessageRelations = relations(directMessages, ({ one }) => ({
   }),
 }));
 
+// New relations for emoji system
+export const emojiCategoryRelations = relations(emojiCategories, ({ many }) => ({
+  emojis: many(emojis),
+}));
+
+export const emojiRelations = relations(emojis, ({ one, many }) => ({
+  category: one(emojiCategories, {
+    fields: [emojis.categoryId],
+    references: [emojiCategories.id],
+  }),
+  createdBy: one(users, {
+    fields: [emojis.createdById],
+    references: [users.id],
+  }),
+  reactions: many(reactions),
+}));
+
+// Updated reaction relations
 export const reactionRelations = relations(reactions, ({ one }) => ({
   user: one(users, {
     fields: [reactions.userId],
@@ -125,6 +175,10 @@ export const reactionRelations = relations(reactions, ({ one }) => ({
   message: one(messages, {
     fields: [reactions.messageId],
     references: [messages.id],
+  }),
+  emoji: one(emojis, {
+    fields: [reactions.emojiId],
+    references: [emojis.id],
   }),
 }));
 
@@ -138,12 +192,22 @@ export const selectMessageSchema = createSelectSchema(messages);
 export const insertDirectMessageSchema = createInsertSchema(directMessages);
 export const selectDirectMessageSchema = createSelectSchema(directMessages);
 
+// New schema exports
+export const insertEmojiCategorySchema = createInsertSchema(emojiCategories);
+export const selectEmojiCategorySchema = createSelectSchema(emojiCategories);
+export const insertEmojiSchema = createInsertSchema(emojis);
+export const selectEmojiSchema = createSelectSchema(emojis);
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Message = typeof messages.$inferSelect;
 export type Channel = typeof channels.$inferSelect;
 export type DirectMessage = typeof directMessages.$inferSelect;
 export type Reaction = typeof reactions.$inferSelect;
+
+// New type exports
+export type EmojiCategory = typeof emojiCategories.$inferSelect;
+export type Emoji = typeof emojis.$inferSelect;
 
 // Re-export the User type as SelectUser for auth compatibility
 export type SelectUser = User;
