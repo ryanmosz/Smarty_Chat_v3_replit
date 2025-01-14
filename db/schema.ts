@@ -13,7 +13,6 @@ export const users = pgTable("users", {
   customStatus: text("custom_status").default("online"),
   avatarUrl: text("avatar_url"),
   avatarColor: text("avatar_color"),
-  lastActive: timestamp("last_active").defaultNow(),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => ({
   usernameSearchIdx: index("username_search_idx").on(table.username),
