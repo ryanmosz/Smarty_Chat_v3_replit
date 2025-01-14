@@ -393,6 +393,15 @@ export function registerRoutes(app: Express): Server {
         return res.status(401).json({ message: 'Authentication required' });
       }
 
+      // Check if the message exists
+      const message = await db.query.messages.findFirst({
+        where: eq(messages.id, messageId),
+      });
+
+      if (!message) {
+        return res.status(404).json({ message: 'Message not found' });
+      }
+
       // Check for existing reaction
       const existingReaction = await db.query.reactions.findFirst({
         where: and(
@@ -412,28 +421,30 @@ export function registerRoutes(app: Express): Server {
           messageId,
           userId,
           emojiId,
-          emoji: !emojiId ? legacyEmoji : null, // Support legacy emoji format
+          emoji: !emojiId ? legacyEmoji : undefined, // Support legacy emoji format
         })
         .returning();
 
-      // Get the message to include channel info in broadcast
-      const [message] = await db.query.messages.findMany({
-        where: eq(messages.id, messageId),
-        limit: 1,
+      // Get full reaction data with user and emoji info
+      const fullReaction = await db.query.reactions.findFirst({
+        where: eq(reactions.id, reaction.id),
+        with: {
+          user: true,
+          emoji: true,
+        },
       });
 
       // Broadcast reaction update
       wss.broadcast({
         type: 'reaction',
         payload: {
-          ...reaction,
+          ...fullReaction,
           channelId: message.channelId,
           threadParentId: message.threadParentId,
-          user: req.user,
         },
       });
 
-      res.json(reaction);
+      res.json(fullReaction);
     } catch (error) {
       console.error('Error adding reaction:', error);
       res.status(500).json({ message: 'Failed to add reaction' });

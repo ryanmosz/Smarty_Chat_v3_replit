@@ -65,17 +65,16 @@ export const directMessages = pgTable("direct_messages", {
   contentSearchIdx: index("dm_content_search_idx").on(table.content),
 }));
 
-// Emoji Categories table
+// Emoji Categories table - updated
 export const emojiCategories = pgTable("emoji_categories", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   description: text("description"),
   displayOrder: integer("display_order").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Emojis table - updated with required timestamps
+// Emojis table - updated
 export const emojis = pgTable("emojis", {
   id: serial("id").primaryKey(),
   shortcode: text("shortcode").unique().notNull(),
@@ -85,25 +84,21 @@ export const emojis = pgTable("emojis", {
   isCustom: boolean("is_custom").default(false).notNull(),
   createdById: integer("created_by_id").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-}, (table) => ({
-  shortcodeIdx: index("emoji_shortcode_idx").on(table.shortcode),
-}));
+});
 
-// Message Reactions table (enhanced)
+// Message Reactions table - updated
 export const reactions = pgTable("reactions", {
   id: serial("id").primaryKey(),
   messageId: integer("message_id").references(() => messages.id),
   userId: integer("user_id").references(() => users.id),
   emojiId: integer("emoji_id").references(() => emojis.id),
-  emoji: text("emoji"), // Kept for backward compatibility
+  emoji: text("emoji"), // Legacy format support
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => ({
-  // Ensure unique reactions per user/message/emoji combination
   uniqueReactionIdx: uniqueIndex("unique_reaction_idx").on(
     table.messageId,
     table.userId,
-    table.emojiId
+    sql`COALESCE(${table.emojiId}, 0)`,
   ),
 }));
 
