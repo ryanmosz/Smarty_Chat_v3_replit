@@ -238,26 +238,13 @@ export function registerRoutes(app: Express): Server {
     try {
       const query = req.query.q as string;
       if (!query?.trim()) {
+        console.log('Empty search query');
         return res.json({ channels: [], messages: [], directMessages: [] });
       }
 
-      // Create search pattern
-      const pattern = `%${query.trim().toLowerCase()}%`;
+      console.log('Processing search query:', query);
 
-      // Search channels
-      const foundChannels = await db
-        .select({
-          id: channels.id,
-          name: channels.name,
-          description: channels.description,
-        })
-        .from(channels)
-        .where(
-          sql`LOWER(${channels.name}) LIKE ${pattern} OR LOWER(COALESCE(${channels.description}, '')) LIKE ${pattern}`
-        )
-        .limit(5);
-
-      // Search messages
+      // Search messages with both full word and prefix matching
       const foundMessages = await db
         .select({
           id: messages.id,
@@ -267,73 +254,46 @@ export function registerRoutes(app: Express): Server {
           createdAt: messages.createdAt,
         })
         .from(messages)
-        .where(
-          sql`LOWER(${messages.content}) LIKE ${pattern}`
-        )
-        .limit(5);
+        .where(sql`
+          content_tsv @@ plainto_tsquery('english', ${query})
+          OR content_tsv @@ to_tsquery('english', ${query + ':*'})
+          OR LOWER(content) LIKE ${`%${query.toLowerCase()}%`}
+        `)
+        .orderBy(messages.createdAt)
+        .limit(10);
+
+      console.log('Found messages:', foundMessages);
 
       // Get users for messages
       const userIds = foundMessages.map(m => m.userId).filter(Boolean);
-      const messageUsers = userIds.length > 0
-        ? await db
-            .select()
-            .from(users)
-            .where(
-              sql`${users.id} IN (${sql.join(userIds)})`
-            )
-        : [];
+      console.log('User IDs for messages:', userIds);
+
+      let messageUsers: any[] = [];
+      if (userIds.length > 0) {
+        messageUsers = await db
+          .select()
+          .from(users)
+          .where(sql`id = ANY(${sql.join(userIds.map(String))})::int[]`);
+      }
+
+      console.log('Found users:', messageUsers);
 
       const messagesWithUsers = foundMessages.map(message => ({
         ...message,
         user: messageUsers.find(u => u.id === message.userId),
       }));
 
-      // Search direct messages
-      const foundDirectMessages = await db
-        .select({
-          id: directMessages.id,
-          content: directMessages.content,
-          fromUserId: directMessages.fromUserId,
-          toUserId: directMessages.toUserId,
-          createdAt: directMessages.createdAt,
-        })
-        .from(directMessages)
-        .where(
-          sql`LOWER(${directMessages.content}) LIKE ${pattern}`
-        )
-        .limit(5);
+      console.log('Final messages with users:', messagesWithUsers);
 
-      // Get users for direct messages
-      const dmUserIds = Array.from(new Set(
-        foundDirectMessages.flatMap(dm => [
-          dm.fromUserId,
-          dm.toUserId
-        ]).filter(Boolean)
-      ));
-
-      const dmUsers = dmUserIds.length > 0
-        ? await db
-            .select()
-            .from(users)
-            .where(
-              sql`${users.id} IN (${sql.join(dmUserIds)})`
-            )
-        : [];
-
-      const directMessagesWithUsers = foundDirectMessages.map(dm => ({
-        ...dm,
-        fromUser: dmUsers.find(u => u.id === dm.fromUserId),
-        toUser: dmUsers.find(u => u.id === dm.toUserId),
-      }));
-
+      // For now, just return messages to verify the search is working
       res.json({
-        channels: foundChannels,
+        channels: [],
         messages: messagesWithUsers,
-        directMessages: directMessagesWithUsers,
+        directMessages: [],
       });
     } catch (error) {
       console.error('Search error:', error);
-      res.status(500).json({
+      res.status(500).json({ 
         message: 'Failed to search',
         error: error instanceof Error ? error.message : 'Unknown error',
         channels: [],
