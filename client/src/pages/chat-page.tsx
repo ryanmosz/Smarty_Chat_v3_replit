@@ -30,13 +30,32 @@ export default function ChatPage() {
         <ChatHeader />
         {/* Chat Area */}
         <div className="flex-1 flex">
+          {/* Main Message Area */}
           <div className="flex-1 flex flex-col">
             {selectedChannelId ? (
               <>
-                <MessageList
-                  messages={threadMessage ? threadMessages : channelMessages}
-                  onThreadClick={threadMessage ? undefined : setThreadMessage}
-                />
+                {threadMessage ? (
+                  <>
+                    <div className="px-4 py-2 border-b bg-accent/20">
+                      <button 
+                        onClick={() => setThreadMessage(undefined)}
+                        className="text-sm text-muted-foreground hover:text-foreground"
+                      >
+                        ← Back to channel
+                      </button>
+                      <div className="mt-2 font-semibold">Thread</div>
+                    </div>
+                    <MessageList
+                      messages={[threadMessage, ...threadMessages]}
+                      onThreadClick={undefined}
+                    />
+                  </>
+                ) : (
+                  <MessageList
+                    messages={channelMessages}
+                    onThreadClick={setThreadMessage}
+                  />
+                )}
                 <MessageInput 
                   channelId={selectedChannelId} 
                   threadParentId={threadMessage?.id}
@@ -49,6 +68,7 @@ export default function ChatPage() {
             )}
           </div>
 
+          {/* Keep the thread panel for context */}
           {threadMessage && (
             <ThreadPanel
               parentMessage={threadMessage}
