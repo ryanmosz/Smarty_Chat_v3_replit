@@ -8,16 +8,8 @@ import { MessageInput } from "./message-input";
 import { useChat } from "@/hooks/use-chat";
 import { format } from "date-fns";
 
-// Extend Message type to include user relation from use-chat.ts
-type MessageWithUser = Message & {
-  user?: {
-    username: string;
-    avatarColor?: string | null;
-  } | null;
-};
-
 interface ThreadPanelProps {
-  parentMessage: MessageWithUser;
+  parentMessage: Message;
   onClose: () => void;
 }
 

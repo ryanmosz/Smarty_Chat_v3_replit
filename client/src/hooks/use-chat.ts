@@ -1,12 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { chatWs } from '../lib/websocket';
-import type { Channel, Message, DirectMessage, User } from '@db/schema';
+import type { Channel, Message, DirectMessage } from '@db/schema';
 import React from 'react';
-
-// Extend Message type to include user relation
-type MessageWithUser = Message & {
-  user?: User | null;
-};
 
 export function useChat() {
   const queryClient = useQueryClient();
@@ -18,7 +13,7 @@ export function useChat() {
 
   // Channel Messages
   const getChannelMessages = (channelId: number) => {
-    return useQuery<MessageWithUser[]>({
+    return useQuery<Message[]>({
       queryKey: [`/api/channels/${channelId}/messages`],
       select: (messages) => messages.filter(m => !m.threadParentId), // Only show root messages
     });
@@ -26,7 +21,7 @@ export function useChat() {
 
   // Thread Messages
   const getThreadMessages = (messageId: number) => {
-    return useQuery<MessageWithUser[]>({
+    return useQuery<Message[]>({
       queryKey: [`/api/messages/${messageId}/thread`],
     });
   };
@@ -53,6 +48,7 @@ export function useChat() {
     onMutate: async (newMessage) => {
       const tempId = generateTempId();
 
+      // Cancel any outgoing refetches
       await queryClient.cancelQueries({ 
         queryKey: [`/api/channels/${newMessage.channelId}/messages`] 
       });
@@ -63,34 +59,35 @@ export function useChat() {
         });
       }
 
-      // Create an optimistic message with user data
-      const optimisticMessage: MessageWithUser = {
-        id: tempId as unknown as number,
+      // Create an optimistic message
+      const optimisticMessage: Message = {
+        id: tempId as any, // Temporary ID
         content: newMessage.content,
         channelId: newMessage.channelId,
         threadParentId: newMessage.threadParentId || null,
-        userId: null,
+        userId: null, // Will be set by the server
         createdAt: new Date(),
         updatedAt: new Date(),
         isDeleted: false,
-        user: null,
       };
 
       if (newMessage.threadParentId) {
-        const previousThreadMessages = queryClient.getQueryData<MessageWithUser[]>(
+        // Update thread messages
+        const previousThreadMessages = queryClient.getQueryData<Message[]>(
           [`/api/messages/${newMessage.threadParentId}/thread`]
         ) || [];
 
-        queryClient.setQueryData<MessageWithUser[]>(
+        queryClient.setQueryData<Message[]>(
           [`/api/messages/${newMessage.threadParentId}/thread`],
           [...previousThreadMessages, optimisticMessage]
         );
       } else {
-        const previousMessages = queryClient.getQueryData<MessageWithUser[]>(
+        // Update channel messages
+        const previousMessages = queryClient.getQueryData<Message[]>(
           [`/api/channels/${newMessage.channelId}/messages`]
         ) || [];
 
-        queryClient.setQueryData<MessageWithUser[]>(
+        queryClient.setQueryData<Message[]>(
           [`/api/channels/${newMessage.channelId}/messages`],
           [...previousMessages, optimisticMessage]
         );
@@ -101,15 +98,16 @@ export function useChat() {
     onSuccess: (_, variables, context) => {
       if (!context) return;
 
+      // Clean up optimistic update on success
       const { tempId } = context;
       const queryKey = variables.threadParentId 
         ? [`/api/messages/${variables.threadParentId}/thread`]
         : [`/api/channels/${variables.channelId}/messages`];
 
-      const messages = queryClient.getQueryData<MessageWithUser[]>(queryKey) || [];
-      queryClient.setQueryData<MessageWithUser[]>(
+      const messages = queryClient.getQueryData<Message[]>(queryKey) || [];
+      queryClient.setQueryData<Message[]>(
         queryKey,
-        messages.filter(m => String(m.id) !== tempId)
+        messages.filter(m => m.id !== tempId)
       );
     }
   });
@@ -135,24 +133,27 @@ export function useChat() {
       return Promise.resolve();
     },
     onMutate: async (messageId) => {
+      // Get all possible query keys that might contain this message
       const channelQueryKeys = channels?.map(c => [`/api/channels/${c.id}/messages`]) || [];
       const threadQueryKey = [`/api/messages/${messageId}/thread`];
 
+      // Cancel any outgoing refetches
       await Promise.all([
         ...channelQueryKeys.map(key => queryClient.cancelQueries({ queryKey: key })),
         queryClient.cancelQueries({ queryKey: threadQueryKey })
       ]);
 
+      // Update all relevant queries to remove the message
       channelQueryKeys.forEach(queryKey => {
-        const messages = queryClient.getQueryData<MessageWithUser[]>(queryKey) || [];
-        queryClient.setQueryData<MessageWithUser[]>(
+        const messages = queryClient.getQueryData<Message[]>(queryKey) || [];
+        queryClient.setQueryData<Message[]>(
           queryKey,
           messages.filter(m => m.id !== messageId)
         );
       });
 
-      const threadMessages = queryClient.getQueryData<MessageWithUser[]>(threadQueryKey) || [];
-      queryClient.setQueryData<MessageWithUser[]>(
+      const threadMessages = queryClient.getQueryData<Message[]>(threadQueryKey) || [];
+      queryClient.setQueryData<Message[]>(
         threadQueryKey,
         threadMessages.filter(m => m.id !== messageId)
       );
@@ -171,21 +172,25 @@ export function useChat() {
           const { channelId, threadParentId } = message.payload;
 
           if (threadParentId) {
+            // Update thread messages
             const threadQueryKey = [`/api/messages/${threadParentId}/thread`];
-            const currentThreadMessages = queryClient.getQueryData<MessageWithUser[]>(threadQueryKey) || [];
+            const currentThreadMessages = queryClient.getQueryData<Message[]>(threadQueryKey) || [];
 
+            // Only add if not already present
             if (!currentThreadMessages.some(m => m.id === message.payload.id)) {
-              queryClient.setQueryData<MessageWithUser[]>(
+              queryClient.setQueryData<Message[]>(
                 threadQueryKey,
                 currentThreadMessages.filter(m => !String(m.id).startsWith('temp-')).concat(message.payload)
               );
             }
           } else {
+            // Update channel messages
             const channelQueryKey = [`/api/channels/${channelId}/messages`];
-            const currentMessages = queryClient.getQueryData<MessageWithUser[]>(channelQueryKey) || [];
+            const currentMessages = queryClient.getQueryData<Message[]>(channelQueryKey) || [];
 
+            // Only add if not already present
             if (!currentMessages.some(m => m.id === message.payload.id)) {
-              queryClient.setQueryData<MessageWithUser[]>(
+              queryClient.setQueryData<Message[]>(
                 channelQueryKey,
                 currentMessages.filter(m => !String(m.id).startsWith('temp-')).concat(message.payload)
               );
@@ -195,20 +200,22 @@ export function useChat() {
         case 'message_deleted':
           const messageId = message.payload.id;
 
+          // Remove message from all possible locations
           channels?.forEach(channel => {
             const channelQueryKey = [`/api/channels/${channel.id}/messages`];
-            const messages = queryClient.getQueryData<MessageWithUser[]>(channelQueryKey) || [];
+            const messages = queryClient.getQueryData<Message[]>(channelQueryKey) || [];
 
-            queryClient.setQueryData<MessageWithUser[]>(
+            queryClient.setQueryData<Message[]>(
               channelQueryKey,
               messages.filter(m => m.id !== messageId)
             );
           });
 
+          // Also check thread messages
           const threadQueryKey = [`/api/messages/${messageId}/thread`];
-          const threadMessages = queryClient.getQueryData<MessageWithUser[]>(threadQueryKey) || [];
+          const threadMessages = queryClient.getQueryData<Message[]>(threadQueryKey) || [];
 
-          queryClient.setQueryData<MessageWithUser[]>(
+          queryClient.setQueryData<Message[]>(
             threadQueryKey,
             threadMessages.filter(m => m.id !== messageId)
           );

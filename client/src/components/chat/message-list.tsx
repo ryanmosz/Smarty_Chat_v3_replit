@@ -8,16 +8,9 @@ import { useChat } from "@/hooks/use-chat";
 import { format } from "date-fns";
 import { useUser } from "@/hooks/use-user";
 
-type MessageWithUser = Message & {
-  user?: {
-    username: string;
-    avatarColor?: string | null;
-  } | null;
-};
-
 interface MessageListProps {
-  messages: MessageWithUser[];
-  onThreadClick?: (message: MessageWithUser) => void;
+  messages: Message[];
+  onThreadClick?: (message: Message) => void;
 }
 
 export function MessageList({ messages, onThreadClick }: MessageListProps) {
@@ -75,6 +68,7 @@ export function MessageList({ messages, onThreadClick }: MessageListProps) {
                     Thread
                   </Button>
                 )}
+                {/* Only show delete button if user authored the message */}
                 {user?.id === message.userId && (
                   <Button
                     variant="ghost"
