@@ -62,6 +62,56 @@ export function useChat() {
     });
   };
 
+  // Send Message
+  const sendMessage = useMutation({
+    mutationFn: (message: { content: string; channelId: number; threadParentId?: number; userId?: number }) => {
+      console.log('Sending channel message:', message);
+      chatWs.send({
+        type: 'message',
+        payload: message
+      });
+      return Promise.resolve();
+    },
+    onMutate: async (newMessage) => {
+      const queryKey = [`/api/channels/${newMessage.channelId}/messages`];
+      await queryClient.cancelQueries({ queryKey });
+      if (newMessage.threadParentId) {
+        await queryClient.cancelQueries({ 
+          queryKey: [`/api/messages/${newMessage.threadParentId}/thread`] 
+        });
+      }
+
+      const optimisticMessage: MessageWithUser = {
+        id: -1 * Date.now(),
+        content: newMessage.content,
+        channelId: newMessage.channelId,
+        threadParentId: newMessage.threadParentId || null,
+        userId: newMessage.userId || null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        isDeleted: false,
+      };
+
+      if (newMessage.threadParentId) {
+        const previousThreadMessages = queryClient.getQueryData<MessageWithUser[]>(
+          [`/api/messages/${newMessage.threadParentId}/thread`]
+        ) || [];
+        queryClient.setQueryData<MessageWithUser[]>(
+          [`/api/messages/${newMessage.threadParentId}/thread`],
+          [...previousThreadMessages, optimisticMessage]
+        );
+      } else {
+        const previousMessages = queryClient.getQueryData<MessageWithUser[]>(queryKey) || [];
+        queryClient.setQueryData<MessageWithUser[]>(
+          queryKey,
+          [...previousMessages, optimisticMessage]
+        );
+      }
+
+      return { optimisticMessage };
+    }
+  });
+
   // Send Direct Message
   const sendDirectMessage = useMutation({
     mutationFn: (message: { content: string; toUserId: number; fromUserId: number }) => {
@@ -268,6 +318,7 @@ export function useChat() {
     getChannelMessages,
     getThreadMessages,
     getDirectMessages,
+    sendMessage,
     sendDirectMessage,
     deleteMessage,
     deleteDirectMessage,
