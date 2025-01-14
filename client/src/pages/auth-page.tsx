@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Logo } from "@/components/ui/logo";
 
 export default function AuthPage() {
   const [username, setUsername] = useState("");
@@ -36,17 +37,13 @@ export default function AuthPage() {
       }
 
       if (action === "register") {
-        // Clear form fields
         clearForm();
-        // Switch to login tab
         setActiveTab("login");
-        // Show success message
         toast({
           title: "Success",
           description: "Registration successful! Please login with your new account.",
         });
       } else {
-        // Only show success message for login
         toast({
           title: "Success",
           description: "Logged in successfully!",
@@ -64,7 +61,8 @@ export default function AuthPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <Card className="w-full max-w-md mx-4">
-        <CardHeader className="text-center">
+        <CardHeader className="text-center space-y-4">
+          <Logo className="mx-auto" />
           <CardTitle>Welcome to Smarty Chat</CardTitle>
         </CardHeader>
         <CardContent>
@@ -72,7 +70,7 @@ export default function AuthPage() {
             value={activeTab} 
             onValueChange={(value) => {
               setActiveTab(value);
-              clearForm(); // Clear form when switching tabs
+              clearForm();
             }}
           >
             <TabsList className="grid w-full grid-cols-2">
