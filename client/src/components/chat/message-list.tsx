@@ -3,12 +3,18 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageSquare, FileIcon } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import type { Message, User } from "@db/schema";
+import type { Message, User, Reaction, Emoji } from "@db/schema";
 import { format } from "date-fns";
 import { useUser } from "@/hooks/use-user";
+import { EmojiPicker } from "./emoji-picker";
+import { useQuery } from "@tanstack/react-query";
 
 interface MessageWithUser extends Message {
   user?: User;
+  reactions?: (Reaction & {
+    user: User;
+    emoji?: Emoji;
+  })[];
 }
 
 interface MessageListProps {
@@ -84,7 +90,7 @@ function renderMessageContent(content: string): React.ReactNode {
     return parts.length > 0 ? <>{parts}</> : content;
   } catch (error) {
     console.error('Error rendering message content:', error);
-    return <span>Error displaying message content.</span>; //Improved error handling
+    return <span>Error displaying message content.</span>;
   }
 }
 
@@ -98,6 +104,50 @@ const formatDate = (dateString: string | Date | null) => {
     return '';
   }
 };
+
+function ReactionList({ reactions }: { reactions: MessageWithUser['reactions'] }) {
+  if (!reactions?.length) return null;
+
+  // Group reactions by emoji
+  const groupedReactions = reactions.reduce((acc, reaction) => {
+    const key = reaction.emoji?.id || reaction.emoji || 'unknown';
+    if (!acc[key]) {
+      acc[key] = {
+        emoji: reaction.emoji,
+        count: 0,
+        users: new Set(),
+      };
+    }
+    acc[key].count++;
+    acc[key].users.add(reaction.user.username);
+    return acc;
+  }, {} as Record<string, { emoji: any; count: number; users: Set<string> }>);
+
+  return (
+    <div className="flex flex-wrap gap-1 mt-1">
+      {Object.values(groupedReactions).map(({ emoji, count, users }, index) => (
+        <div
+          key={index}
+          className="flex items-center gap-1 bg-accent/50 rounded-full px-2 py-0.5 text-sm"
+          title={Array.from(users).join(', ')}
+        >
+          {emoji?.unicode || emoji?.imageUrl ? (
+            emoji.unicode || (
+              <img
+                src={emoji.imageUrl}
+                alt={emoji.shortcode}
+                className="w-4 h-4 object-contain"
+              />
+            )
+          ) : (
+            emoji
+          )}
+          <span className="text-xs">{count}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export function MessageList({ messages, onThreadClick, highlightedMessageId }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -158,7 +208,9 @@ export function MessageList({ messages, onThreadClick, highlightedMessageId }: M
                   </span>
                 </div>
                 <div className="mt-1">{renderMessageContent(message.content)}</div>
+                <ReactionList reactions={message.reactions} />
                 <div className="mt-2 flex items-center gap-2">
+                  <EmojiPicker messageId={message.id} />
                   {onThreadClick && (
                     <Button
                       variant="ghost"

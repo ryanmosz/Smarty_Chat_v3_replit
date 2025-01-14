@@ -1,10 +1,14 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { chatWs } from '../lib/websocket';
-import type { Channel, Message, DirectMessage, User } from '@db/schema';
+import type { Channel, Message, DirectMessage, User, Reaction, Emoji } from '@db/schema';
 import React from 'react';
 
 interface MessageWithUser extends Message {
   user?: User;
+  reactions?: (Reaction & {
+    user: User;
+    emoji?: Emoji;
+  })[];
 }
 
 interface DirectMessageWithUser extends DirectMessage {
@@ -177,6 +181,39 @@ export function useChat() {
     }
   });
 
+  // Add Reaction
+  const addReaction = useMutation({
+    mutationFn: async ({ messageId, emojiId }: { messageId: number; emojiId: number }) => {
+      const response = await fetch(`/api/messages/${messageId}/reactions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ emojiId }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to add reaction');
+      }
+
+      return response.json();
+    },
+  });
+
+  // Remove Reaction
+  const removeReaction = useMutation({
+    mutationFn: async ({ messageId, reactionId }: { messageId: number; reactionId: number }) => {
+      const response = await fetch(`/api/messages/${messageId}/reactions/${reactionId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to remove reaction');
+      }
+    },
+  });
+
+
   // Subscribe to WebSocket updates
   React.useEffect(() => {
     const unsubscribe = chatWs.subscribe((message) => {
@@ -234,6 +271,24 @@ export function useChat() {
           });
         }
         break;
+        case 'reaction_added': {
+          const { messageId, channelId, threadParentId } = message.payload;
+          if (threadParentId) {
+            queryClient.invalidateQueries({ queryKey: [`/api/messages/${threadParentId}/thread`] });
+          } else {
+            queryClient.invalidateQueries({ queryKey: [`/api/channels/${channelId}/messages`] });
+          }
+          break;
+        }
+        case 'reaction_removed': {
+          const { messageId, channelId, threadParentId } = message.payload;
+          if (threadParentId) {
+            queryClient.invalidateQueries({ queryKey: [`/api/messages/${threadParentId}/thread`] });
+          } else {
+            queryClient.invalidateQueries({ queryKey: [`/api/channels/${channelId}/messages`] });
+          }
+          break;
+        }
       }
     });
 
@@ -251,5 +306,7 @@ export function useChat() {
     sendDirectMessage,
     deleteMessage,
     deleteDirectMessage,
+    addReaction,
+    removeReaction,
   };
 }
