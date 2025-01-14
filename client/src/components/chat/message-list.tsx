@@ -1,19 +1,8 @@
 import { useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { MessageSquare, Trash2 } from "lucide-react";
+import { MessageSquare } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import type { Message, User } from "@db/schema";
 import { useChat } from "@/hooks/use-chat";
 import { format } from "date-fns";
@@ -30,20 +19,11 @@ interface MessageListProps {
 
 export function MessageList({ messages, onThreadClick }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
-  const { deleteMessage } = useChat();
   const { user } = useUser();
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
-
-  const handleDelete = async (messageId: number) => {
-    try {
-      await deleteMessage.mutateAsync(messageId);
-    } catch (error) {
-      console.error('Error deleting message:', error);
-    }
-  };
 
   return (
     <ScrollArea className="flex-1 p-4">
@@ -90,31 +70,6 @@ export function MessageList({ messages, onThreadClick }: MessageListProps) {
                       Thread
                     </Button>
                   )}
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="opacity-0 group-hover:opacity-100 text-destructive"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Delete Message</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Are you sure you want to delete this message? This action cannot be undone.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => handleDelete(message.id)}>
-                          Delete
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
                 </div>
               </div>
             </div>

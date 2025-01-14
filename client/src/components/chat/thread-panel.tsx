@@ -1,18 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { X, Trash2 } from "lucide-react";
+import { X } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import type { Message, User } from "@db/schema";
 import { MessageList } from "./message-list";
 import { MessageInput } from "./message-input";
@@ -30,20 +19,9 @@ interface ThreadPanelProps {
 }
 
 export function ThreadPanel({ parentMessage, onClose }: ThreadPanelProps) {
-  const { getThreadMessages, deleteMessage } = useChat();
+  const { getThreadMessages } = useChat();
   const { data: threadMessages = [] } = getThreadMessages(parentMessage.id);
   const { user } = useUser();
-
-  const handleDelete = async (messageId: number) => {
-    try {
-      await deleteMessage.mutateAsync(messageId);
-      if (messageId === parentMessage.id) {
-        onClose();
-      }
-    } catch (error) {
-      console.error('Error deleting message:', error);
-    }
-  };
 
   return (
     <div className="w-80 border-l bg-background flex flex-col">
@@ -81,33 +59,6 @@ export function ThreadPanel({ parentMessage, onClose }: ThreadPanelProps) {
                 </span>
               </div>
               <div className="mt-1">{parentMessage.content}</div>
-              <div className="mt-2 flex items-center gap-2">
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="opacity-0 group-hover:opacity-100 text-destructive"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Delete Thread</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Are you sure you want to delete this thread? This action cannot be undone and will close the thread view.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={() => handleDelete(parentMessage.id)}>
-                        Delete
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </div>
             </div>
           </div>
         </div>
