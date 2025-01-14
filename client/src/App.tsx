@@ -35,6 +35,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={ChatPage} />
+      <Route path="/channel/:channelId" component={ChatPage} />
       <Route component={NotFound} />
     </Switch>
   );

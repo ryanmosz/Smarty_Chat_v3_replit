@@ -62,21 +62,20 @@ export function SearchBar() {
 
   const handleMessageClick = (channelId: number, messageId: number) => {
     console.log('Navigating to message:', { channelId, messageId });
-    setLocation(`/channel/${channelId}#message-${messageId}`);
+    // Update to use the /channel/:channelId route format
+    setLocation(`/channel/${channelId}`);
+    // Use setTimeout to ensure the navigation completes before scrolling
+    setTimeout(() => {
+      const messageElement = document.getElementById(`message-${messageId}`);
+      if (messageElement) {
+        messageElement.scrollIntoView({ behavior: 'smooth' });
+        messageElement.classList.add('highlight');
+        setTimeout(() => messageElement.classList.remove('highlight'), 2000);
+      }
+    }, 100);
     setShowResults(false);
     setQuery("");
   };
-
-  // Debug log whenever search results change
-  useEffect(() => {
-    if (searchResults) {
-      console.log('Current search results:', {
-        query: debouncedQuery,
-        messageCount: searchResults.messages?.length,
-        messages: searchResults.messages
-      });
-    }
-  }, [searchResults, debouncedQuery]);
 
   return (
     <div className="relative flex items-center gap-2">
