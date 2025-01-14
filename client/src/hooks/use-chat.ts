@@ -8,12 +8,21 @@ interface MessageWithUser extends Message {
   user?: User;
 }
 
+interface DirectMessageWithUser extends DirectMessage {
+  fromUser?: User;
+  toUser?: User;
+}
+
 export function useChat() {
   const queryClient = useQueryClient();
 
   // Channels
   const { data: channels } = useQuery<Channel[]>({
     queryKey: ['/api/channels'],
+  });
+
+  const { data: users } = useQuery<User[]>({
+    queryKey: ['/api/users'],
   });
 
   // Channel Messages
@@ -36,8 +45,9 @@ export function useChat() {
 
   // Direct Messages
   const getDirectMessages = (userId: number) => {
-    return useQuery<DirectMessage[]>({
+    return useQuery<DirectMessageWithUser[]>({
       queryKey: [`/api/dm/${userId}`],
+      enabled: userId > 0,
     });
   };
 
@@ -133,6 +143,56 @@ export function useChat() {
     }
   });
 
+  // Send Direct Message
+  const sendDirectMessage = useMutation({
+    mutationFn: (message: { content: string; toUserId: number; fromUserId: number }) => {
+      chatWs.send({
+        type: 'direct_message',
+        payload: message
+      });
+      return Promise.resolve();
+    },
+    onMutate: async (newMessage) => {
+      const queryKey = [`/api/dm/${newMessage.toUserId}`];
+      await queryClient.cancelQueries({ queryKey });
+
+      const optimisticMessage: DirectMessageWithUser = {
+        id: -Date.now(),
+        content: newMessage.content,
+        fromUserId: newMessage.fromUserId,
+        toUserId: newMessage.toUserId,
+        createdAt: new Date(),
+        isDeleted: false,
+      };
+
+      const previousMessages = queryClient.getQueryData<DirectMessageWithUser[]>(queryKey) || [];
+      queryClient.setQueryData<DirectMessageWithUser[]>(
+        queryKey,
+        [...previousMessages, optimisticMessage]
+      );
+
+      return { optimisticMessage };
+    }
+  });
+
+  // Delete Direct Message
+  const deleteDirectMessage = useMutation({
+    mutationFn: (messageId: number) => {
+      return new Promise((resolve, reject) => {
+        try {
+          chatWs.send({
+            type: 'direct_message_deleted',
+            payload: { id: messageId }
+          });
+          resolve(messageId);
+        } catch (error) {
+          reject(error);
+        }
+      });
+    }
+  });
+
+
   // Subscribe to WebSocket updates
   React.useEffect(() => {
     const unsubscribe = chatWs.subscribe((message) => {
@@ -187,18 +247,45 @@ export function useChat() {
           );
           break;
         }
+        case 'direct_message': {
+          const { fromUserId, toUserId } = message.payload;
+          const dmQueryKey = [`/api/dm/${toUserId}`];
+          const currentMessages = queryClient.getQueryData<DirectMessageWithUser[]>(dmQueryKey) || [];
+
+          if (!currentMessages.some(m => m.id === message.payload.id)) {
+            queryClient.setQueryData<DirectMessageWithUser[]>(
+              dmQueryKey,
+              currentMessages.filter(m => typeof m.id === 'number' && m.id < 0).concat(message.payload)
+            );
+          }
+          break;
+        }
+        case 'direct_message_deleted': {
+          const { id: deletedMessageId, toUserId } = message.payload;
+          const dmQueryKey = [`/api/dm/${toUserId}`];
+          const messages = queryClient.getQueryData<DirectMessageWithUser[]>(dmQueryKey) || [];
+
+          queryClient.setQueryData<DirectMessageWithUser[]>(
+            dmQueryKey,
+            messages.filter(m => m.id !== deletedMessageId)
+          );
+          break;
+        }
       }
     });
 
     return () => unsubscribe();
-  }, [queryClient, channels]);
+  }, [queryClient]);
 
   return {
     channels,
+    users,
     getChannelMessages,
     getThreadMessages,
     getDirectMessages,
     sendMessage,
     deleteMessage,
+    sendDirectMessage,
+    deleteDirectMessage,
   };
 }

@@ -130,6 +130,8 @@ export const insertChannelSchema = createInsertSchema(channels);
 export const selectChannelSchema = createSelectSchema(channels);
 export const insertMessageSchema = createInsertSchema(messages);
 export const selectMessageSchema = createSelectSchema(messages);
+export const insertDirectMessageSchema = createInsertSchema(directMessages);
+export const selectDirectMessageSchema = createSelectSchema(directMessages);
 
 // Type exports
 export type User = typeof users.$inferSelect;

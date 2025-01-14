@@ -8,48 +8,39 @@ import { useUser } from "@/hooks/use-user";
 import { chatWs } from "@/lib/websocket";
 
 interface MessageInputProps {
-  channelId: number;
+  channelId?: number;
   threadParentId?: number;
+  toUserId?: number;
 }
 
-export function MessageInput({ channelId, threadParentId }: MessageInputProps) {
+export function MessageInput({ channelId, threadParentId, toUserId }: MessageInputProps) {
   const [content, setContent] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const typingTimeoutRef = useRef<NodeJS.Timeout>();
-  const { sendMessage } = useChat();
+  const { sendMessage, sendDirectMessage } = useChat();
   const { toast } = useToast();
   const { user } = useUser();
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleTyping = () => {
-    if (!isTyping) {
-      setIsTyping(true);
-      chatWs.send({
-        type: "typing",
-        payload: { channelId },
-      });
-    }
-
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-    }
-
-    typingTimeoutRef.current = setTimeout(() => {
-      setIsTyping(false);
-    }, 1000);
-  };
 
   const handleSubmit = async () => {
     if (!content.trim()) return;
 
     try {
-      await sendMessage.mutateAsync({
-        content,
-        channelId,
-        threadParentId,
-        userId: user?.id
-      });
+      if (toUserId && user?.id) {
+        await sendDirectMessage.mutateAsync({
+          content: content.trim(),
+          toUserId,
+          fromUserId: user.id
+        });
+      } else if (channelId) {
+        await sendMessage.mutateAsync({
+          content: content.trim(),
+          channelId,
+          threadParentId,
+          userId: user?.id
+        });
+      }
       setContent("");
     } catch (error) {
       toast({
@@ -90,12 +81,20 @@ export function MessageInput({ channelId, threadParentId }: MessageInputProps) {
       const { url } = await response.json();
       const fileMessage = `[${file.name}](${url})`;
 
-      await sendMessage.mutateAsync({
-        content: fileMessage,
-        channelId,
-        threadParentId,
-        userId: user?.id
-      });
+      if (toUserId && user?.id) {
+        await sendDirectMessage.mutateAsync({
+          content: fileMessage,
+          toUserId,
+          fromUserId: user.id
+        });
+      } else if (channelId) {
+        await sendMessage.mutateAsync({
+          content: fileMessage,
+          channelId,
+          threadParentId,
+          userId: user?.id
+        });
+      }
 
       toast({
         title: "Success",
@@ -122,7 +121,23 @@ export function MessageInput({ channelId, threadParentId }: MessageInputProps) {
           value={content}
           onChange={(e) => {
             setContent(e.target.value);
-            handleTyping();
+            if (channelId) {
+              if (!isTyping) {
+                setIsTyping(true);
+                chatWs.send({
+                  type: "typing",
+                  payload: { channelId },
+                });
+              }
+
+              if (typingTimeoutRef.current) {
+                clearTimeout(typingTimeoutRef.current);
+              }
+
+              typingTimeoutRef.current = setTimeout(() => {
+                setIsTyping(false);
+              }, 1000);
+            }
           }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {

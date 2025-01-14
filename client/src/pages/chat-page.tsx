@@ -1,31 +1,67 @@
 import { useState, useEffect } from "react";
 import { useChat } from "@/hooks/use-chat";
 import { ChannelList } from "@/components/chat/channel-list";
+import { DirectMessageList } from "@/components/chat/direct-message-list";
 import { MessageList } from "@/components/chat/message-list";
 import { MessageInput } from "@/components/chat/message-input";
 import { ChatHeader } from "@/components/chat/chat-header";
-import type { Message } from "@db/schema";
+import type { Message, DirectMessage } from "@db/schema";
 
 export default function ChatPage() {
   const [selectedChannelId, setSelectedChannelId] = useState<number>();
+  const [selectedUserId, setSelectedUserId] = useState<number>();
   const [threadMessage, setThreadMessage] = useState<Message>();
-  const { channels = [], getChannelMessages, getThreadMessages } = useChat();
+  const { 
+    channels = [], 
+    users = [], 
+    getChannelMessages, 
+    getDirectMessages, 
+    getThreadMessages 
+  } = useChat();
+
   const { data: channelMessages = [] } = getChannelMessages(selectedChannelId || 0);
+  const { data: directMessages = [] } = getDirectMessages(selectedUserId || 0);
   const { data: threadMessages = [] } = getThreadMessages(threadMessage?.id || 0);
 
-  // Reset thread view when changing channels
+  // Reset thread view when changing channels or DMs
   useEffect(() => {
     setThreadMessage(undefined);
+  }, [selectedChannelId, selectedUserId]);
+
+  // Reset other selection when one is chosen
+  useEffect(() => {
+    if (selectedChannelId) setSelectedUserId(undefined);
   }, [selectedChannelId]);
+
+  useEffect(() => {
+    if (selectedUserId) setSelectedChannelId(undefined);
+  }, [selectedUserId]);
+
+  const messages = directMessages.map(dm => ({
+    id: dm.id,
+    content: dm.content,
+    createdAt: dm.createdAt,
+    updatedAt: dm.createdAt,
+    isDeleted: dm.isDeleted,
+    userId: dm.fromUserId,
+    channelId: null,
+    threadParentId: null,
+    user: dm.fromUser
+  }));
 
   return (
     <div className="h-screen flex">
-      {/* Channel List Sidebar - Full Height */}
-      <div className="w-60 border-r bg-background">
+      {/* Sidebar - Full Height */}
+      <div className="w-60 border-r bg-background flex flex-col">
         <ChannelList
           channels={channels}
           selectedChannelId={selectedChannelId}
           onChannelSelect={setSelectedChannelId}
+        />
+        <DirectMessageList
+          users={users}
+          selectedUserId={selectedUserId}
+          onUserSelect={setSelectedUserId}
         />
       </div>
 
@@ -70,9 +106,19 @@ export default function ChatPage() {
                   </>
                 )}
               </>
+            ) : selectedUserId ? (
+              <>
+                <MessageList
+                  messages={messages}
+                  onThreadClick={undefined}
+                />
+                <MessageInput 
+                  toUserId={selectedUserId}
+                />
+              </>
             ) : (
               <div className="flex-1 flex items-center justify-center text-muted-foreground">
-                Select a channel to start chatting
+                Select a channel or user to start chatting
               </div>
             )}
           </div>

@@ -1,12 +1,13 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { Server } from 'http';
 import { db } from '@db';
-import { messages, users } from '@db/schema';
+import { messages, directMessages, users } from '@db/schema';
 import { parse as parseUrl } from 'url';
 import { eq } from 'drizzle-orm';
 
 type WebSocketMessage = {
-  type: 'message' | 'typing' | 'channel_created' | 'channel_deleted' | 'message_deleted' | 'error';
+  type: 'message' | 'typing' | 'channel_created' | 'channel_deleted' | 'message_deleted' | 
+        'direct_message' | 'direct_message_deleted' | 'error';
   payload: any;
 };
 
@@ -77,7 +78,6 @@ export function setupWebSocket(server: Server) {
           case 'message_deleted': {
             const { id } = message.payload;
             try {
-              // First check if the message exists
               const [existingMessage] = await db.query.messages.findMany({
                 where: eq(messages.id, id),
                 limit: 1
@@ -91,13 +91,11 @@ export function setupWebSocket(server: Server) {
                 return;
               }
 
-              // Delete the message
               const [deletedMessage] = await db
                 .delete(messages)
                 .where(eq(messages.id, id))
                 .returning();
 
-              // Broadcast the deletion to all clients
               broadcast({ 
                 type: 'message_deleted', 
                 payload: { id, channelId: deletedMessage.channelId } 
@@ -112,6 +110,77 @@ export function setupWebSocket(server: Server) {
             break;
           }
 
+          case 'direct_message': {
+            const { content, fromUserId, toUserId } = message.payload;
+
+            try {
+              const [newDM] = await db
+                .insert(directMessages)
+                .values({ 
+                  content, 
+                  fromUserId, 
+                  toUserId,
+                })
+                .returning();
+
+              const [dmWithUsers] = await db.query.directMessages.findMany({
+                where: eq(directMessages.id, newDM.id),
+                with: {
+                  fromUser: true,
+                  toUser: true
+                },
+                limit: 1
+              });
+
+              broadcast({ type: 'direct_message', payload: dmWithUsers });
+            } catch (error) {
+              console.error('Error creating direct message:', error);
+              ws.send(JSON.stringify({ 
+                type: 'error', 
+                payload: 'Failed to create direct message' 
+              }));
+            }
+            break;
+          }
+
+          case 'direct_message_deleted': {
+            const { id } = message.payload;
+            try {
+              const [existingDM] = await db.query.directMessages.findMany({
+                where: eq(directMessages.id, id),
+                limit: 1
+              });
+
+              if (!existingDM) {
+                ws.send(JSON.stringify({ 
+                  type: 'error', 
+                  payload: 'Direct message not found' 
+                }));
+                return;
+              }
+
+              const [deletedDM] = await db
+                .delete(directMessages)
+                .where(eq(directMessages.id, id))
+                .returning();
+
+              broadcast({ 
+                type: 'direct_message_deleted', 
+                payload: { 
+                  id, 
+                  fromUserId: deletedDM.fromUserId,
+                  toUserId: deletedDM.toUserId 
+                } 
+              });
+            } catch (error) {
+              console.error('Error deleting direct message:', error);
+              ws.send(JSON.stringify({ 
+                type: 'error', 
+                payload: 'Failed to delete direct message' 
+              }));
+            }
+            break;
+          }
           case 'typing':
           case 'channel_created':
           case 'channel_deleted':
