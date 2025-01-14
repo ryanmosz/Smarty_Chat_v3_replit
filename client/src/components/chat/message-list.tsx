@@ -1,21 +1,14 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { MessageSquare, SmileIcon } from "lucide-react";
+import { MessageSquare, FileIcon } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import type { Message, User, Reaction } from "@db/schema";
+import type { Message, User } from "@db/schema";
 import { format } from "date-fns";
 import { useUser } from "@/hooks/use-user";
-import { chatWs } from "@/lib/websocket";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 
 interface MessageWithUser extends Message {
-  user?: User | null;
-  reactions?: (Reaction & { user?: User | null })[];
+  user?: User;
 }
 
 interface MessageListProps {
@@ -24,52 +17,103 @@ interface MessageListProps {
   highlightedMessageId?: number;
 }
 
-// Common emojis for quick reactions
-const quickEmojis = ['👍', '❤️', '😂', '🎉', '🚀', '👀'];
+// Helper function to parse and render message content
+function renderMessageContent(content: string): React.ReactNode {
+  try {
+    if (!content) return '';
+
+    // Regular expression to match markdown-style links: [text](/path)
+    const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+    const parts: React.ReactNode[] = [];
+    let lastIndex = 0;
+    let match;
+
+    while ((match = linkRegex.exec(content)) !== null) {
+      // Add text before the match
+      if (match.index > lastIndex) {
+        parts.push(
+          <span key={`text-${match.index}`}>
+            {content.slice(lastIndex, match.index)}
+          </span>
+        );
+      }
+
+      // Add the link component
+      const [, text, url] = match;
+      if (url.startsWith('/uploads/')) {
+        // It's an uploaded file
+        parts.push(
+          <a 
+            key={`link-${match.index}`}
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-500 hover:text-blue-700 inline-flex items-center gap-1"
+          >
+            <FileIcon className="h-4 w-4" />
+            {text}
+          </a>
+        );
+      } else {
+        // Regular link
+        parts.push(
+          <a 
+            key={`link-${match.index}`}
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-500 hover:text-blue-700"
+          >
+            {text}
+          </a>
+        );
+      }
+
+      lastIndex = match.index + match[0].length;
+    }
+
+    // Add remaining text
+    if (lastIndex < content.length) {
+      parts.push(
+        <span key="text-end">
+          {content.slice(lastIndex)}
+        </span>
+      );
+    }
+
+    return parts.length > 0 ? <>{parts}</> : content;
+  } catch (error) {
+    console.error('Error rendering message content:', error);
+    return <span>Error displaying message content.</span>; //Improved error handling
+  }
+}
+
+// Helper function to safely format dates
+const formatDate = (dateString: string | Date | null) => {
+  if (!dateString) return '';
+  try {
+    return format(new Date(dateString), 'MMM d, h:mm a');
+  } catch (error) {
+    console.error('Date formatting error:', error);
+    return '';
+  }
+};
 
 export function MessageList({ messages, onThreadClick, highlightedMessageId }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const highlightedRef = useRef<HTMLDivElement>(null);
   const { user } = useUser();
-  const [showEmojiPicker, setShowEmojiPicker] = useState<number | null>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Scroll to highlighted message when it changes
   useEffect(() => {
     if (highlightedMessageId && highlightedRef.current) {
       highlightedRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
     }
   }, [highlightedMessageId]);
-
-  const handleReaction = async (messageId: number, emoji: string) => {
-    if (!user?.id) return;
-
-    try {
-      chatWs.send({
-        type: 'reaction',
-        payload: { 
-          messageId, 
-          emoji, 
-          userId: user.id 
-        }
-      });
-      setShowEmojiPicker(null);
-    } catch (error) {
-      console.error('Error sending reaction:', error);
-    }
-  };
-
-  const formatDate = (dateString: string | Date | null) => {
-    if (!dateString) return '';
-    try {
-      return format(new Date(dateString), 'MMM d, h:mm a');
-    } catch (error) {
-      console.error('Date formatting error:', error);
-      return '';
-    }
-  };
 
   return (
     <ScrollArea className="flex-1 p-4">
@@ -82,25 +126,10 @@ export function MessageList({ messages, onThreadClick, highlightedMessageId }: M
           const userInitials = username.slice(0, 2).toUpperCase();
           const isHighlighted = message.id === highlightedMessageId;
 
-          // Group reactions by emoji and count them
-          const reactionGroups = message.reactions?.reduce((acc, reaction) => {
-            if (!reaction.emoji) return acc;
-            if (!acc[reaction.emoji]) {
-              acc[reaction.emoji] = {
-                count: 0,
-                users: new Set()
-              };
-            }
-            acc[reaction.emoji].count++;
-            if (reaction.userId) {
-              acc[reaction.emoji].users.add(reaction.userId);
-            }
-            return acc;
-          }, {} as Record<string, { count: number, users: Set<number> }>) || {};
-
           return (
             <div
               key={message.id}
+              id={`message-${message.id}`}
               ref={isHighlighted ? highlightedRef : undefined}
               className={`flex items-start gap-3 group ${
                 isHighlighted ? 'bg-accent/20 -mx-4 px-4 py-2 rounded-md transition-colors duration-500' : ''
@@ -121,60 +150,15 @@ export function MessageList({ messages, onThreadClick, highlightedMessageId }: M
               </Avatar>
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <span className="font-semibold">{username}</span>
+                  <span className="font-semibold">
+                    {username}
+                  </span>
                   <span className="text-xs text-muted-foreground">
                     {formatDate(message.createdAt)}
                   </span>
                 </div>
-                <div className="mt-1 break-words">{message.content}</div>
-
-                {/* Reactions and action buttons */}
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  {/* Display reaction groups */}
-                  {Object.entries(reactionGroups).map(([emoji, { count, users }]) => (
-                    <Button
-                      key={emoji}
-                      variant={user?.id && users.has(user.id) ? "default" : "ghost"}
-                      size="sm"
-                      className="h-6 px-2 text-sm"
-                      onClick={() => handleReaction(message.id, emoji)}
-                    >
-                      {emoji} {count}
-                    </Button>
-                  ))}
-
-                  {/* Quick reaction buttons */}
-                  <Popover 
-                    open={showEmojiPicker === message.id} 
-                    onOpenChange={(open) => setShowEmojiPicker(open ? message.id : null)}
-                  >
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 opacity-0 group-hover:opacity-100"
-                      >
-                        <SmileIcon className="h-4 w-4" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-2">
-                      <div className="flex gap-1">
-                        {quickEmojis.map(emoji => (
-                          <Button
-                            key={emoji}
-                            variant="ghost"
-                            size="sm"
-                            className="px-2"
-                            onClick={() => handleReaction(message.id, emoji)}
-                          >
-                            {emoji}
-                          </Button>
-                        ))}
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-
-                  {/* Thread button */}
+                <div className="mt-1">{renderMessageContent(message.content)}</div>
+                <div className="mt-2 flex items-center gap-2">
                   {onThreadClick && (
                     <Button
                       variant="ghost"

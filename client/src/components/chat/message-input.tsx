@@ -5,6 +5,7 @@ import { Send, Paperclip, Loader2 } from "lucide-react";
 import { useChat } from "@/hooks/use-chat";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/hooks/use-user";
+import { chatWs } from "@/lib/websocket";
 
 interface MessageInputProps {
   channelId?: number;
@@ -14,11 +15,13 @@ interface MessageInputProps {
 
 export function MessageInput({ channelId, threadParentId, toUserId }: MessageInputProps) {
   const [content, setContent] = useState("");
+  const [isTyping, setIsTyping] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout>();
   const { sendMessage, sendDirectMessage } = useChat();
   const { toast } = useToast();
   const { user } = useUser();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSubmit = async () => {
     if (!content.trim()) return;
@@ -40,7 +43,6 @@ export function MessageInput({ channelId, threadParentId, toUserId }: MessageInp
       }
       setContent("");
     } catch (error) {
-      console.error('Error sending message:', error);
       toast({
         variant: "destructive",
         title: "Error",
@@ -99,7 +101,6 @@ export function MessageInput({ channelId, threadParentId, toUserId }: MessageInp
         description: "File uploaded successfully",
       });
     } catch (error) {
-      console.error('Upload error:', error);
       toast({
         variant: "destructive",
         title: "Error",
@@ -118,7 +119,26 @@ export function MessageInput({ channelId, threadParentId, toUserId }: MessageInp
       <div className="flex gap-2">
         <Textarea
           value={content}
-          onChange={(e) => setContent(e.target.value)}
+          onChange={(e) => {
+            setContent(e.target.value);
+            if (channelId) {
+              if (!isTyping) {
+                setIsTyping(true);
+                chatWs.send({
+                  type: "typing",
+                  payload: { channelId },
+                });
+              }
+
+              if (typingTimeoutRef.current) {
+                clearTimeout(typingTimeoutRef.current);
+              }
+
+              typingTimeoutRef.current = setTimeout(() => {
+                setIsTyping(false);
+              }, 1000);
+            }
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();

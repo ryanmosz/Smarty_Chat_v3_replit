@@ -1,13 +1,13 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { Server } from 'http';
 import { db } from '@db';
-import { messages, directMessages, users, reactions } from '@db/schema';
+import { messages, directMessages, users } from '@db/schema';
 import { parse as parseUrl } from 'url';
-import { eq, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 type WebSocketMessage = {
   type: 'message' | 'typing' | 'channel_created' | 'channel_deleted' | 'message_deleted' | 
-        'direct_message' | 'direct_message_deleted' | 'reaction' | 'reaction_deleted' | 'error' | 'user_status';
+        'direct_message' | 'direct_message_deleted' | 'user_status' | 'error';
   payload: any;
 };
 
@@ -33,6 +33,7 @@ export function setupWebSocket(server: Server) {
       const userId = parseInt(query.userId as string);
       if (!isNaN(userId)) {
         wss.handleUpgrade(request, socket, head, async (ws) => {
+          // Set user status to online immediately upon connection
           try {
             await db
               .update(users)
@@ -42,6 +43,7 @@ export function setupWebSocket(server: Server) {
               })
               .where(eq(users.id, userId));
 
+            // Broadcast the status change immediately
             broadcast({
               type: 'user_status',
               payload: {
@@ -49,13 +51,12 @@ export function setupWebSocket(server: Server) {
                 status: 'online'
               }
             });
-
-            (ws as WebSocketClient).userId = userId;
-            wss.emit('connection', ws, request);
           } catch (error) {
-            console.error('Error handling WebSocket upgrade:', error);
-            socket.destroy();
+            console.error('Error setting initial user status:', error);
           }
+
+          (ws as WebSocketClient).userId = userId;
+          wss.emit('connection', ws, request);
         });
       }
     }
@@ -66,178 +67,192 @@ export function setupWebSocket(server: Server) {
     clients.add(ws);
 
     ws.on('message', async (data: string) => {
-      let message: WebSocketMessage;
       try {
-        message = JSON.parse(data);
-        console.log('Received WebSocket message:', message);
-      } catch (error) {
-        console.error('Failed to parse WebSocket message:', error);
-        ws.send(JSON.stringify({ type: 'error', payload: 'Invalid message format' }));
-        return;
-      }
+        const message: WebSocketMessage = JSON.parse(data);
+        console.log(`Received WebSocket message:`, message);
 
-      try {
         switch (message.type) {
-          case 'reaction': {
-            const { messageId, emoji, userId } = message.payload;
-            if (!messageId || !emoji || !userId) {
-              throw new Error('Missing required fields for reaction');
-            }
+          case 'user_status': {
+            const { userId, status } = message.payload;
+            try {
+              // Update both status fields
+              await db
+                .update(users)
+                .set({ 
+                  status: status,
+                  customStatus: status 
+                })
+                .where(eq(users.id, userId));
 
-            const [targetMessage] = await db.query.messages.findMany({
-              where: eq(messages.id, messageId),
-              with: {
-                user: true,
-                channel: true
-              },
-              limit: 1
-            });
-
-            if (!targetMessage) {
+              // Broadcast to all connected clients immediately
+              broadcast({
+                type: 'user_status',
+                payload: { userId, status }
+              });
+            } catch (error) {
+              console.error('Error updating user status:', error);
               ws.send(JSON.stringify({ 
                 type: 'error', 
-                payload: 'Message not found' 
+                payload: 'Failed to update status' 
               }));
-              return;
             }
+            break;
+          }
+          case 'message': {
+            const { content, channelId, threadParentId, userId } = message.payload;
 
-            const existingReaction = await db.query.reactions.findFirst({
-              where: sql`${reactions.messageId} = ${messageId} AND ${reactions.userId} = ${userId} AND ${reactions.emoji} = ${emoji}`
-            });
-
-            if (existingReaction) {
-              await db.delete(reactions)
-                .where(eq(reactions.id, existingReaction.id));
-
-              broadcast({
-                type: 'reaction_deleted',
-                payload: { 
-                  messageId, 
-                  emoji, 
-                  userId,
-                  channelId: targetMessage.channelId,
-                  threadParentId: targetMessage.threadParentId
-                }
-              });
-            } else {
-              const [newReaction] = await db
-                .insert(reactions)
-                .values({ messageId, emoji, userId })
+            try {
+              const [newMessage] = await db
+                .insert(messages)
+                .values({ 
+                  content, 
+                  channelId, 
+                  threadParentId,
+                  userId 
+                })
                 .returning();
 
-              const reactionWithUser = await db.query.reactions.findFirst({
-                where: eq(reactions.id, newReaction.id),
+              const [messageWithUser] = await db.query.messages.findMany({
+                where: eq(messages.id, newMessage.id),
                 with: {
                   user: true
-                }
+                },
+                limit: 1
               });
 
-              if (!reactionWithUser) {
-                throw new Error('Failed to fetch created reaction');
-              }
-
-              broadcast({ 
-                type: 'reaction', 
-                payload: {
-                  ...reactionWithUser,
-                  channelId: targetMessage.channelId,
-                  threadParentId: targetMessage.threadParentId
-                }
-              });
+              broadcast({ type: 'message', payload: messageWithUser });
+            } catch (error) {
+              console.error('Error creating message:', error);
+              ws.send(JSON.stringify({ 
+                type: 'error', 
+                payload: 'Failed to create message' 
+              }));
             }
             break;
           }
 
-          case 'message': {
-            const { content, channelId, threadParentId, userId } = message.payload;
-            if (!content || !channelId || !userId) {
-              throw new Error('Missing required fields for message');
+          case 'message_deleted': {
+            const { id } = message.payload;
+            try {
+              const [existingMessage] = await db.query.messages.findMany({
+                where: eq(messages.id, id),
+                limit: 1
+              });
+
+              if (!existingMessage) {
+                ws.send(JSON.stringify({ 
+                  type: 'error', 
+                  payload: 'Message not found' 
+                }));
+                return;
+              }
+
+              const [deletedMessage] = await db
+                .delete(messages)
+                .where(eq(messages.id, id))
+                .returning();
+
+              broadcast({ 
+                type: 'message_deleted', 
+                payload: { id, channelId: deletedMessage.channelId } 
+              });
+            } catch (error) {
+              console.error('Error deleting message:', error);
+              ws.send(JSON.stringify({ 
+                type: 'error', 
+                payload: 'Failed to delete message' 
+              }));
             }
-
-            const [newMessage] = await db
-              .insert(messages)
-              .values({ 
-                content, 
-                channelId, 
-                threadParentId,
-                userId 
-              })
-              .returning();
-
-            const [messageWithUser] = await db.query.messages.findMany({
-              where: eq(messages.id, newMessage.id),
-              with: {
-                user: true,
-                reactions: {
-                  with: {
-                    user: true
-                  }
-                }
-              },
-              limit: 1
-            });
-
-            if (!messageWithUser) {
-              throw new Error('Failed to fetch created message');
-            }
-
-            broadcast({ type: 'message', payload: messageWithUser });
             break;
           }
 
           case 'direct_message': {
             const { content, fromUserId, toUserId } = message.payload;
-            if (!content || !fromUserId || !toUserId) {
-              throw new Error('Missing required fields for direct message');
+
+            try {
+              const [newDM] = await db
+                .insert(directMessages)
+                .values({ 
+                  content, 
+                  fromUserId, 
+                  toUserId,
+                })
+                .returning();
+
+              const [dmWithUsers] = await db.query.directMessages.findMany({
+                where: eq(directMessages.id, newDM.id),
+                with: {
+                  fromUser: true,
+                  toUser: true
+                },
+                limit: 1
+              });
+
+              broadcast({ type: 'direct_message', payload: dmWithUsers });
+            } catch (error) {
+              console.error('Error creating direct message:', error);
+              ws.send(JSON.stringify({ 
+                type: 'error', 
+                payload: 'Failed to create direct message' 
+              }));
             }
-
-            const [newDM] = await db
-              .insert(directMessages)
-              .values({ 
-                content, 
-                fromUserId, 
-                toUserId 
-              })
-              .returning();
-
-            const [dmWithUsers] = await db.query.directMessages.findMany({
-              where: eq(directMessages.id, newDM.id),
-              with: {
-                fromUser: true,
-                toUser: true
-              },
-              limit: 1
-            });
-
-            if (!dmWithUsers) {
-              throw new Error('Failed to fetch created direct message');
-            }
-
-            broadcast({ type: 'direct_message', payload: dmWithUsers });
             break;
           }
 
+          case 'direct_message_deleted': {
+            const { id } = message.payload;
+            try {
+              const [existingDM] = await db.query.directMessages.findMany({
+                where: eq(directMessages.id, id),
+                limit: 1
+              });
+
+              if (!existingDM) {
+                ws.send(JSON.stringify({ 
+                  type: 'error', 
+                  payload: 'Direct message not found' 
+                }));
+                return;
+              }
+
+              const [deletedDM] = await db
+                .delete(directMessages)
+                .where(eq(directMessages.id, id))
+                .returning();
+
+              broadcast({ 
+                type: 'direct_message_deleted', 
+                payload: { 
+                  id, 
+                  fromUserId: deletedDM.fromUserId,
+                  toUserId: deletedDM.toUserId 
+                } 
+              });
+            } catch (error) {
+              console.error('Error deleting direct message:', error);
+              ws.send(JSON.stringify({ 
+                type: 'error', 
+                payload: 'Failed to delete direct message' 
+              }));
+            }
+            break;
+          }
           case 'typing':
           case 'channel_created':
           case 'channel_deleted':
-          case 'message_deleted':
-          case 'direct_message_deleted':
-          case 'user_status':
             broadcast(message);
             break;
-
           default:
-            console.warn('Unknown message type:', message.type);
             ws.send(JSON.stringify({ 
               type: 'error', 
               payload: 'Unknown message type' 
             }));
         }
       } catch (error) {
-        console.error('Error processing WebSocket message:', error);
+        console.error('WebSocket message processing error:', error);
         ws.send(JSON.stringify({ 
           type: 'error', 
-          payload: error instanceof Error ? error.message : 'Failed to process message' 
+          payload: 'Failed to process message' 
         }));
       }
     });
@@ -276,6 +291,7 @@ export function setupWebSocket(server: Server) {
   });
 
   function broadcast(message: WebSocketMessage) {
+    console.log('Broadcasting message:', message);
     const deadClients: WebSocket[] = [];
 
     clients.forEach(client => {
