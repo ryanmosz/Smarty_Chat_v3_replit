@@ -62,9 +62,18 @@ export function DirectMessageList({
     )
   );
 
-  const handleStatusChange = (newStatus: string) => {
+  const handleStatusChange = async (newStatus: string) => {
     if (!currentUser) return;
 
+    // Update local state first for immediate feedback
+    const updatedUser = { ...currentUser, customStatus: newStatus, status: newStatus };
+    // Find and update the current user in the users array
+    const userIndex = users.findIndex(u => u.id === currentUser.id);
+    if (userIndex !== -1) {
+      users[userIndex] = updatedUser;
+    }
+
+    // Send WebSocket message
     chatWs.send({
       type: 'user_status',
       payload: {
@@ -116,6 +125,8 @@ export function DirectMessageList({
     }
   };
 
+  const currentStatus = currentUser?.customStatus || 'online';
+
   return (
     <div className="flex flex-col">
       <div className="p-4 flex items-center justify-between border-b">
@@ -139,8 +150,8 @@ export function DirectMessageList({
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="sm" className="h-8">
                 <div className="flex items-center gap-2">
-                  {statusIcons[currentUser?.customStatus as keyof typeof statusIcons || 'online']}
-                  <span className="text-xs capitalize">{currentUser?.customStatus || 'online'}</span>
+                  {statusIcons[currentStatus as keyof typeof statusIcons]}
+                  <span className="text-xs capitalize">{currentStatus}</span>
                 </div>
               </Button>
             </DropdownMenuTrigger>
