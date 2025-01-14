@@ -244,58 +244,43 @@ export function registerRoutes(app: Express): Server {
 
       const likeQuery = `%${query}%`;
 
-      // Search channels
-      const matchingChannels = await db
+      // Search channels - simple name search
+      const channels = await db
         .select()
         .from(channels)
         .where(ilike(channels.name, likeQuery))
-        .catch(error => {
-          console.error('Error searching channels:', error);
-          return [];
-        });
+        .limit(5);
 
-      // Search messages
-      const matchingMessages = await db.query.messages.findMany({
-        where: ilike(messages.content, likeQuery),
-        with: {
-          user: true,
-          channel: true
-        },
-        limit: 20
-      }).catch(error => {
-        console.error('Error searching messages:', error);
-        return [];
-      });
+      // Search messages - basic content search
+      const messages = await db
+        .select({
+          id: messages.id,
+          content: messages.content,
+          channelId: messages.channelId,
+          createdAt: messages.createdAt,
+          userId: messages.userId
+        })
+        .from(messages)
+        .where(ilike(messages.content, likeQuery))
+        .limit(5);
 
-      // Filter out messages with missing relationships
-      const validMessages = (matchingMessages || []).filter(msg => 
-        msg && msg.content && msg.user && msg.channel && 
-        msg.user.username && msg.channel.name
-      );
-
-      // Search direct messages
-      const matchingDirectMessages = await db.query.directMessages.findMany({
-        where: ilike(directMessages.content, likeQuery),
-        with: {
-          fromUser: true,
-          toUser: true
-        },
-        limit: 20
-      }).catch(error => {
-        console.error('Error searching direct messages:', error);
-        return [];
-      });
-
-      // Filter out direct messages with missing relationships
-      const validDirectMessages = (matchingDirectMessages || []).filter(dm => 
-        dm && dm.content && dm.fromUser && dm.toUser && 
-        dm.fromUser.username && dm.toUser.username
-      );
+      // Search direct messages - basic content search
+      const directMessages = await db
+        .select({
+          id: directMessages.id,
+          content: directMessages.content,
+          fromUserId: directMessages.fromUserId,
+          toUserId: directMessages.toUserId,
+          createdAt: directMessages.createdAt
+        })
+        .from(directMessages)
+        .where(ilike(directMessages.content, likeQuery))
+        .limit(5);
 
       res.json({
-        channels: matchingChannels || [],
-        messages: validMessages,
-        directMessages: validDirectMessages
+        channels: channels || [],
+        messages: messages || [],
+        directMessages: directMessages || []
       });
     } catch (error) {
       console.error('Error searching:', error);
