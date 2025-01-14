@@ -1,6 +1,6 @@
 import { pgTable, text, serial, integer, boolean, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
-import { relations, type InferModel } from "drizzle-orm";
+import { relations, type InferSelectModel, type InferInsertModel } from "drizzle-orm";
 import { z } from "zod";
 
 // Users table
@@ -23,17 +23,20 @@ export const channels = pgTable("channels", {
   createdById: integer("created_by_id").references(() => users.id),
 });
 
-// Messages table
+// Messages table - Define it first without the self-reference
 export const messages = pgTable("messages", {
   id: serial("id").primaryKey(),
   content: text("content").notNull(),
   userId: integer("user_id").references(() => users.id),
   channelId: integer("channel_id").references(() => channels.id),
-  threadParentId: integer("thread_parent_id").references(() => messages.id),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   isDeleted: boolean("is_deleted").default(false),
 });
+
+// Add the self-reference after the table is defined
+export const threadParentId = integer("thread_parent_id").references(() => messages.id);
+messages.addColumns({ threadParentId });
 
 // Relations
 export const userRelations = relations(users, ({ many }) => ({
@@ -78,10 +81,10 @@ export const insertMessageSchema = createInsertSchema(messages);
 export const selectMessageSchema = createSelectSchema(messages);
 
 // Type exports
-export type User = InferModel<typeof users, "select">;
-export type NewUser = InferModel<typeof users, "insert">;
-export type Message = InferModel<typeof messages, "select">;
-export type Channel = InferModel<typeof channels, "select">;
+export type User = InferSelectModel<typeof users>;
+export type NewUser = InferInsertModel<typeof users>;
+export type Message = InferSelectModel<typeof messages>;
+export type Channel = InferSelectModel<typeof channels>;
 
 // Re-export the User type as SelectUser for auth compatibility
 export type SelectUser = User;

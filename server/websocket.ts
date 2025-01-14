@@ -44,30 +44,27 @@ export function setupWebSocket(server: Server) {
           case 'message': {
             const { content, channelId, threadParentId, userId } = message.payload;
 
-            // Create the message
-            const result = await db.insert(messages).values({ 
-              content, 
-              channelId, 
-              threadParentId, 
-              userId,
-              createdAt: new Date(),
-              updatedAt: new Date(),
-              isDeleted: false
-            });
-
-            const [newMessage] = result;
+            const [newMessage] = await db.insert(messages)
+              .values({ 
+                content, 
+                channelId, 
+                threadParentId, 
+                userId,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                isDeleted: false
+              })
+              .returning();
 
             if (!newMessage) {
               throw new Error('Failed to create message');
             }
 
-            // Fetch the complete message with user data
             const messageWithUser = await db.query.messages.findFirst({
               where: eq(messages.id, newMessage.id),
               with: {
                 user: {
                   columns: {
-                    id: true,
                     username: true,
                     avatarColor: true
                   }
