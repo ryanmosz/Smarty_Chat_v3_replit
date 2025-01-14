@@ -269,17 +269,24 @@ export function registerRoutes(app: Express): Server {
       });
 
       // Transform dates to ISO strings and ensure all fields are properly formatted
-      res.json({
+      const response = {
         channels: [],
         messages: foundMessages.map(msg => ({
           ...msg,
-          createdAt: msg.createdAt?.toISOString() ?? new Date().toISOString()
+          createdAt: msg.createdAt ? msg.createdAt.toISOString() : null,
+          updatedAt: msg.updatedAt ? msg.updatedAt.toISOString() : null,
+          user: msg.user || null,
+          channel: msg.channel || null
         })),
         directMessages: foundDirectMessages.map(dm => ({
           ...dm,
-          createdAt: dm.createdAt?.toISOString() ?? new Date().toISOString()
+          createdAt: dm.createdAt ? dm.createdAt.toISOString() : null,
+          fromUser: dm.fromUser || null,
+          toUser: dm.toUser || null
         }))
-      });
+      };
+
+      res.json(response);
     } catch (error) {
       console.error('Search error:', error);
       res.status(500).json({
