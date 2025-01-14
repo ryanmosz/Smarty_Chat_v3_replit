@@ -61,8 +61,8 @@ export default function AuthPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <Card className="w-full max-w-md mx-4">
-        <CardHeader className="text-center space-y-4">
-          <Logo className="mx-auto" />
+        <CardHeader className="flex justify-center items-center pt-8 pb-6">
+          <Logo size="large" />
         </CardHeader>
         <CardContent>
           <Tabs 
