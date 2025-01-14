@@ -53,6 +53,15 @@ export function useChat() {
     });
   };
 
+  // Thread Messages
+  const getThreadMessages = (messageId: number) => {
+    return useQuery<MessageWithUser[]>({
+      queryKey: [`/api/messages/${messageId}/thread`],
+      enabled: messageId > 0,
+      select: (messages) => messages?.filter(m => !m.isDeleted) || [],
+    });
+  };
+
   // Send Direct Message
   const sendDirectMessage = useMutation({
     mutationFn: (message: { content: string; toUserId: number; fromUserId: number }) => {
@@ -257,6 +266,7 @@ export function useChat() {
     users,
     activeConversations,
     getChannelMessages,
+    getThreadMessages,
     getDirectMessages,
     sendDirectMessage,
     deleteMessage,
