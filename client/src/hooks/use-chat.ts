@@ -16,6 +16,7 @@ export function useChat() {
     return useQuery<Message[]>({
       queryKey: [`/api/channels/${channelId}/messages`],
       select: (messages) => messages.filter(m => !m.threadParentId), // Only show root messages
+      enabled: channelId > 0, // Only fetch when we have a valid channel ID
     });
   };
 
@@ -23,6 +24,7 @@ export function useChat() {
   const getThreadMessages = (messageId: number) => {
     return useQuery<Message[]>({
       queryKey: [`/api/messages/${messageId}/thread`],
+      enabled: messageId > 0, // Only fetch when we have a valid message ID
     });
   };
 

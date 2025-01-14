@@ -10,8 +10,13 @@ import type { Message } from "@db/schema";
 export default function ChatPage() {
   const [selectedChannelId, setSelectedChannelId] = useState<number>();
   const [threadMessage, setThreadMessage] = useState<Message>();
-  const { channels = [], getChannelMessages } = useChat();
-  const { data: messages = [] } = getChannelMessages(selectedChannelId || 0);
+  const { channels = [], getChannelMessages, getThreadMessages } = useChat();
+  const { data: channelMessages = [] } = getChannelMessages(selectedChannelId || 0);
+  const { data: threadMessages = [] } = threadMessage 
+    ? getThreadMessages(threadMessage.id)
+    : { data: undefined };
+
+  const displayMessages = threadMessage ? threadMessages : channelMessages;
 
   return (
     <div className="h-screen flex">
@@ -33,10 +38,13 @@ export default function ChatPage() {
             {selectedChannelId ? (
               <>
                 <MessageList
-                  messages={messages}
+                  messages={displayMessages}
                   onThreadClick={setThreadMessage}
                 />
-                <MessageInput channelId={selectedChannelId} />
+                <MessageInput 
+                  channelId={selectedChannelId} 
+                  threadParentId={threadMessage?.id}
+                />
               </>
             ) : (
               <div className="flex-1 flex items-center justify-center text-muted-foreground">
