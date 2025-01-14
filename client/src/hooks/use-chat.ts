@@ -50,6 +50,7 @@ export function useChat() {
     return useQuery<DirectMessageWithUser[]>({
       queryKey: [`/api/dm/${userId}`],
       enabled: userId > 0,
+      select: (messages) => messages.filter(m => !m.isDeleted), // Filter out deleted messages
     });
   };
 
@@ -180,61 +181,37 @@ export function useChat() {
           const { channelId, threadParentId } = message.payload;
 
           if (threadParentId) {
-            const threadQueryKey = [`/api/messages/${threadParentId}/thread`];
-            const currentThreadMessages = queryClient.getQueryData<MessageWithUser[]>(threadQueryKey) || [];
-
-            if (!currentThreadMessages.some(m => m.id === message.payload.id)) {
-              queryClient.setQueryData<MessageWithUser[]>(
-                threadQueryKey,
-                currentThreadMessages.filter(m => m.id < 0).concat(message.payload)
-              );
-            }
+            queryClient.invalidateQueries({ 
+              queryKey: [`/api/messages/${threadParentId}/thread`] 
+            });
           } else {
-            const msgChannelQueryKey = [`/api/channels/${channelId}/messages`];
-            const currentMessages = queryClient.getQueryData<MessageWithUser[]>(msgChannelQueryKey) || [];
-
-            if (!currentMessages.some(m => m.id === message.payload.id)) {
-              queryClient.setQueryData<MessageWithUser[]>(
-                msgChannelQueryKey,
-                currentMessages.filter(m => m.id < 0).concat(message.payload)
-              );
-            }
+            queryClient.invalidateQueries({ 
+              queryKey: [`/api/channels/${channelId}/messages`] 
+            });
           }
-          break;
-        }
-        case 'message_deleted': {
-          const { id: deletedMessageId, channelId } = message.payload;
-          const messagesQueryKey = [`/api/channels/${channelId}/messages`];
-          const messages = queryClient.getQueryData<MessageWithUser[]>(messagesQueryKey) || [];
-
-          queryClient.setQueryData<MessageWithUser[]>(
-            messagesQueryKey,
-            messages.filter(m => m.id !== deletedMessageId)
-          );
           break;
         }
         case 'direct_message': {
-          const { toUserId } = message.payload;
-          const dmQueryKey = [`/api/dm/${toUserId}`];
-          const currentMessages = queryClient.getQueryData<DirectMessageWithUser[]>(dmQueryKey) || [];
-
-          if (!currentMessages.some(m => m.id === message.payload.id)) {
-            queryClient.setQueryData<DirectMessageWithUser[]>(
-              dmQueryKey,
-              currentMessages.filter(m => m.id < 0).concat(message.payload)
-            );
-          }
+          const { fromUserId, toUserId } = message.payload;
+          // Invalidate queries for both users involved
+          queryClient.invalidateQueries({ queryKey: [`/api/dm/${fromUserId}`] });
+          queryClient.invalidateQueries({ queryKey: [`/api/dm/${toUserId}`] });
           break;
         }
+        case 'message_deleted':
         case 'direct_message_deleted': {
-          const { id: deletedMessageId, toUserId } = message.payload;
-          const dmQueryKey = [`/api/dm/${toUserId}`];
-          const messages = queryClient.getQueryData<DirectMessageWithUser[]>(dmQueryKey) || [];
-
-          queryClient.setQueryData<DirectMessageWithUser[]>(
-            dmQueryKey,
-            messages.filter(m => m.id !== deletedMessageId)
-          );
+          const { fromUserId, toUserId } = message.payload;
+          if (fromUserId && toUserId) {
+            // DM deletion
+            queryClient.invalidateQueries({ queryKey: [`/api/dm/${fromUserId}`] });
+            queryClient.invalidateQueries({ queryKey: [`/api/dm/${toUserId}`] });
+          } else {
+            // Channel message deletion
+            const { channelId } = message.payload;
+            queryClient.invalidateQueries({ 
+              queryKey: [`/api/channels/${channelId}/messages`] 
+            });
+          }
           break;
         }
       }
