@@ -234,6 +234,7 @@ export function registerRoutes(app: Express): Server {
   });
 
 
+  // Add more detailed logging to the search endpoint
   app.get("/api/search", async (req, res) => {
     try {
       const query = req.query.q as string;
@@ -248,7 +249,8 @@ export function registerRoutes(app: Express): Server {
       const searchPattern = `%${query.toLowerCase()}%`;
       console.log('Using search pattern:', searchPattern);
 
-      // Search messages with simple LIKE query
+      // Search messages with simple LIKE query and log the query
+      console.log('Executing search query...');
       const foundMessages = await db
         .select({
           id: messages.id,
@@ -258,11 +260,10 @@ export function registerRoutes(app: Express): Server {
           createdAt: messages.createdAt,
         })
         .from(messages)
-        .where(sql`LOWER(content) LIKE ${searchPattern}`)
-        .orderBy(messages.createdAt)
-        .limit(10);
+        .where(sql`LOWER(content) LIKE ${searchPattern}`);
 
-      console.log('Found messages:', foundMessages);
+      console.log('Search query results:', foundMessages.length, 'messages found');
+      console.log('Sample results:', foundMessages.slice(0, 2));
 
       // Get users for messages
       const userIds = foundMessages.map(m => m.userId).filter(Boolean);
@@ -292,7 +293,7 @@ export function registerRoutes(app: Express): Server {
       });
     } catch (error) {
       console.error('Search error:', error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: 'Failed to search',
         error: error instanceof Error ? error.message : 'Unknown error',
         channels: [],
