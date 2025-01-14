@@ -211,20 +211,36 @@ export function registerRoutes(app: Express): Server {
   // Add new route for active conversations
   app.get("/api/active-conversations", async (req, res) => {
     try {
+      const currentUserId = req.user?.id;
+      if (!currentUserId) {
+        return res.status(401).json({ message: 'Authentication required' });
+      }
+
       const allDirectMessages = await db.query.directMessages.findMany({
+        where: or(
+          and(
+            eq(directMessages.fromUserId, currentUserId),
+            ne(directMessages.fromUserId, directMessages.toUserId)
+          ),
+          and(
+            eq(directMessages.toUserId, currentUserId),
+            ne(directMessages.fromUserId, directMessages.toUserId)
+          )
+        ),
         with: {
           fromUser: true,
           toUser: true
         },
-        orderBy: (messages, { desc }) => [desc(messages.createdAt)],
+        orderBy: desc(directMessages.createdAt),
       });
 
       // Get unique conversations (latest message for each user pair)
       const conversationMap = new Map<string, any>();
       allDirectMessages.forEach(dm => {
-        if (dm.fromUserId && dm.toUserId) {
-          const key = `${Math.min(dm.fromUserId, dm.toUserId)}-${Math.max(dm.fromUserId, dm.toUserId)}`;
-          if (!conversationMap.has(key) && !dm.isDeleted) {
+        if (!dm.isDeleted && dm.fromUserId && dm.toUserId) {
+          const otherUserId = dm.fromUserId === currentUserId ? dm.toUserId : dm.fromUserId;
+          const key = `${Math.min(currentUserId, otherUserId)}-${Math.max(currentUserId, otherUserId)}`;
+          if (!conversationMap.has(key)) {
             conversationMap.set(key, dm);
           }
         }
@@ -237,6 +253,7 @@ export function registerRoutes(app: Express): Server {
       res.status(500).json({ message: 'Failed to fetch active conversations' });
     }
   });
+
 
 
   app.get("/api/search", async (req, res) => {
