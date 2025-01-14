@@ -242,9 +242,14 @@ export function registerRoutes(app: Express): Server {
         return res.json({ channels: [], messages: [], directMessages: [] });
       }
 
+      console.log('Search query:', query);
+
       // Split query into words and create LIKE patterns
       const searchWords = query.trim().toLowerCase().split(/\s+/);
+      console.log('Search words:', searchWords);
+
       const likePatterns = searchWords.map(word => `%${word}%`);
+      console.log('Like patterns:', likePatterns);
 
       // Search channels
       const foundChannels = await db
@@ -254,10 +259,12 @@ export function registerRoutes(app: Express): Server {
           description: channels.description
         })
         .from(channels)
-        .where(sql`(${channels.name} ILIKE ANY (ARRAY[${sql.join(likePatterns)}]) OR 
-                     ${channels.description} ILIKE ANY (ARRAY[${sql.join(likePatterns)}]))`)
+        .where(sql`(${channels.name} ILIKE ANY (${sql.array(likePatterns, 'text')}) OR 
+                   ${channels.description} ILIKE ANY (${sql.array(likePatterns, 'text')}))`)
         .orderBy(channels.name)
         .limit(5);
+
+      console.log('Found channels:', foundChannels);
 
       // Search messages
       const foundMessages = await db
@@ -269,18 +276,24 @@ export function registerRoutes(app: Express): Server {
           userId: messages.userId
         })
         .from(messages)
-        .where(sql`${messages.content} ILIKE ANY (ARRAY[${sql.join(likePatterns)}])`)
+        .where(sql`${messages.content} ILIKE ANY (${sql.array(likePatterns, 'text')})`)
         .orderBy(sql`${messages.createdAt} DESC`)
         .limit(5);
 
+      console.log('Found messages:', foundMessages);
+
       // Get user data for messages
-      const userIds = foundMessages.map(m => m.userId).filter(Boolean);
+      const userIds = foundMessages.map(m => m.userId).filter((id): id is number => id != null);
+      console.log('User IDs:', userIds);
+
       const messageUsers = userIds.length > 0 
         ? await db
             .select()
             .from(users)
-            .where(sql`${users.id} = ANY(${sql`ARRAY[${userIds.join(',')}]`})`)
+            .where(sql`${users.id} = ANY(${sql.array(userIds, 'int4')})`)
         : [];
+
+      console.log('Message users:', messageUsers);
 
       const messagesWithUsers = foundMessages.map(message => ({
         ...message,
@@ -297,21 +310,23 @@ export function registerRoutes(app: Express): Server {
           toUserId: directMessages.toUserId
         })
         .from(directMessages)
-        .where(sql`${directMessages.content} ILIKE ANY (ARRAY[${sql.join(likePatterns)}])`)
+        .where(sql`${directMessages.content} ILIKE ANY (${sql.array(likePatterns, 'text')})`)
         .orderBy(sql`${directMessages.createdAt} DESC`)
         .limit(5);
+
+      console.log('Found direct messages:', foundDirectMessages);
 
       // Get user data for direct messages
       const dmUserIds = [...new Set([
         ...foundDirectMessages.map(dm => dm.fromUserId),
         ...foundDirectMessages.map(dm => dm.toUserId)
-      ])].filter(Boolean);
+      ])].filter((id): id is number => id != null);
 
       const dmUsers = dmUserIds.length > 0
         ? await db
             .select()
             .from(users)
-            .where(sql`${users.id} = ANY(${sql`ARRAY[${dmUserIds.join(',')}]`})`)
+            .where(sql`${users.id} = ANY(${sql.array(dmUserIds, 'int4')})`)
         : [];
 
       const directMessagesWithUsers = foundDirectMessages.map(dm => ({
@@ -320,15 +335,19 @@ export function registerRoutes(app: Express): Server {
         toUser: dmUsers.find(u => u.id === dm.toUserId)
       }));
 
-      res.json({
-        channels: foundChannels || [],
-        messages: messagesWithUsers || [],
-        directMessages: directMessagesWithUsers || []
-      });
+      const response = {
+        channels: foundChannels,
+        messages: messagesWithUsers,
+        directMessages: directMessagesWithUsers
+      };
+
+      console.log('Search response:', response);
+      res.json(response);
     } catch (error) {
       console.error('Error searching:', error);
       res.status(500).json({ 
         message: 'Failed to search',
+        error: error instanceof Error ? error.message : 'Unknown error',
         channels: [],
         messages: [],
         directMessages: []
