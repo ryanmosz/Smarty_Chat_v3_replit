@@ -49,12 +49,13 @@ export function setupWebSocket(server: Server) {
                 status: 'online'
               }
             });
-          } catch (error) {
-            console.error('Error setting initial user status:', error);
-          }
 
-          (ws as WebSocketClient).userId = userId;
-          wss.emit('connection', ws, request);
+            (ws as WebSocketClient).userId = userId;
+            wss.emit('connection', ws, request);
+          } catch (error) {
+            console.error('Error handling WebSocket upgrade:', error);
+            socket.destroy();
+          }
         });
       }
     }
@@ -65,108 +66,178 @@ export function setupWebSocket(server: Server) {
     clients.add(ws);
 
     ws.on('message', async (data: string) => {
+      let message: WebSocketMessage;
       try {
-        const message: WebSocketMessage = JSON.parse(data);
-        console.log(`Received WebSocket message:`, message);
+        message = JSON.parse(data);
+        console.log('Received WebSocket message:', message);
+      } catch (error) {
+        console.error('Failed to parse WebSocket message:', error);
+        ws.send(JSON.stringify({ type: 'error', payload: 'Invalid message format' }));
+        return;
+      }
 
+      try {
         switch (message.type) {
           case 'reaction': {
             const { messageId, emoji, userId } = message.payload;
+            if (!messageId || !emoji || !userId) {
+              throw new Error('Missing required fields for reaction');
+            }
 
-            try {
-              // Check if reaction already exists
-              const existingReaction = await db.query.reactions.findFirst({
-                where: sql`${reactions.messageId} = ${messageId} AND ${reactions.userId} = ${userId} AND ${reactions.emoji} = ${emoji}`
-              });
+            const [targetMessage] = await db.query.messages.findMany({
+              where: eq(messages.id, messageId),
+              with: {
+                user: true,
+                channel: true
+              },
+              limit: 1
+            });
 
-              // Get message context first to include in broadcast
-              const [targetMessage] = await db.query.messages.findMany({
-                where: eq(messages.id, messageId),
-                with: {
-                  user: true,
-                  channel: true
-                },
-                limit: 1
-              });
-
-              if (!targetMessage) {
-                ws.send(JSON.stringify({ 
-                  type: 'error', 
-                  payload: 'Message not found' 
-                }));
-                return;
-              }
-
-              if (existingReaction) {
-                // Remove reaction if it exists
-                await db.delete(reactions)
-                  .where(eq(reactions.id, existingReaction.id));
-
-                broadcast({
-                  type: 'reaction_deleted',
-                  payload: { 
-                    messageId, 
-                    emoji, 
-                    userId,
-                    channelId: targetMessage.channelId,
-                    threadParentId: targetMessage.threadParentId
-                  }
-                });
-              } else {
-                // Add new reaction
-                const [newReaction] = await db
-                  .insert(reactions)
-                  .values({ messageId, emoji, userId })
-                  .returning();
-
-                const reactionWithUser = await db.query.reactions.findFirst({
-                  where: eq(reactions.id, newReaction.id),
-                  with: {
-                    user: true
-                  }
-                });
-
-                if (reactionWithUser) {
-                  broadcast({ 
-                    type: 'reaction', 
-                    payload: {
-                      ...reactionWithUser,
-                      channelId: targetMessage.channelId,
-                      threadParentId: targetMessage.threadParentId
-                    }
-                  });
-                }
-              }
-            } catch (error) {
-              console.error('Error handling reaction:', error);
+            if (!targetMessage) {
               ws.send(JSON.stringify({ 
                 type: 'error', 
-                payload: 'Failed to handle reaction' 
+                payload: 'Message not found' 
               }));
+              return;
+            }
+
+            const existingReaction = await db.query.reactions.findFirst({
+              where: sql`${reactions.messageId} = ${messageId} AND ${reactions.userId} = ${userId} AND ${reactions.emoji} = ${emoji}`
+            });
+
+            if (existingReaction) {
+              await db.delete(reactions)
+                .where(eq(reactions.id, existingReaction.id));
+
+              broadcast({
+                type: 'reaction_deleted',
+                payload: { 
+                  messageId, 
+                  emoji, 
+                  userId,
+                  channelId: targetMessage.channelId,
+                  threadParentId: targetMessage.threadParentId
+                }
+              });
+            } else {
+              const [newReaction] = await db
+                .insert(reactions)
+                .values({ messageId, emoji, userId })
+                .returning();
+
+              const reactionWithUser = await db.query.reactions.findFirst({
+                where: eq(reactions.id, newReaction.id),
+                with: {
+                  user: true
+                }
+              });
+
+              if (!reactionWithUser) {
+                throw new Error('Failed to fetch created reaction');
+              }
+
+              broadcast({ 
+                type: 'reaction', 
+                payload: {
+                  ...reactionWithUser,
+                  channelId: targetMessage.channelId,
+                  threadParentId: targetMessage.threadParentId
+                }
+              });
             }
             break;
           }
-          case 'message':
+
+          case 'message': {
+            const { content, channelId, threadParentId, userId } = message.payload;
+            if (!content || !channelId || !userId) {
+              throw new Error('Missing required fields for message');
+            }
+
+            const [newMessage] = await db
+              .insert(messages)
+              .values({ 
+                content, 
+                channelId, 
+                threadParentId,
+                userId 
+              })
+              .returning();
+
+            const [messageWithUser] = await db.query.messages.findMany({
+              where: eq(messages.id, newMessage.id),
+              with: {
+                user: true,
+                reactions: {
+                  with: {
+                    user: true
+                  }
+                }
+              },
+              limit: 1
+            });
+
+            if (!messageWithUser) {
+              throw new Error('Failed to fetch created message');
+            }
+
+            broadcast({ type: 'message', payload: messageWithUser });
+            break;
+          }
+
+          case 'direct_message': {
+            const { content, fromUserId, toUserId } = message.payload;
+            if (!content || !fromUserId || !toUserId) {
+              throw new Error('Missing required fields for direct message');
+            }
+
+            const [newDM] = await db
+              .insert(directMessages)
+              .values({ 
+                content, 
+                fromUserId, 
+                toUserId 
+              })
+              .returning();
+
+            const [dmWithUsers] = await db.query.directMessages.findMany({
+              where: eq(directMessages.id, newDM.id),
+              with: {
+                fromUser: true,
+                toUser: true
+              },
+              limit: 1
+            });
+
+            if (!dmWithUsers) {
+              throw new Error('Failed to fetch created direct message');
+            }
+
+            broadcast({ type: 'direct_message', payload: dmWithUsers });
+            break;
+          }
+
           case 'typing':
-          case 'direct_message':
-          case 'user_status':
           case 'channel_created':
           case 'channel_deleted':
           case 'message_deleted':
           case 'direct_message_deleted':
+          case 'user_status':
             broadcast(message);
             break;
+
           default:
+            console.warn('Unknown message type:', message.type);
             ws.send(JSON.stringify({ 
               type: 'error', 
               payload: 'Unknown message type' 
             }));
         }
       } catch (error) {
-        console.error('WebSocket message processing error:', error);
+        console.error('Error processing WebSocket message:', error);
         ws.send(JSON.stringify({ 
           type: 'error', 
-          payload: 'Failed to process message' 
+          payload: error instanceof Error ? error.message : 'Failed to process message' 
         }));
       }
     });
@@ -205,7 +276,6 @@ export function setupWebSocket(server: Server) {
   });
 
   function broadcast(message: WebSocketMessage) {
-    console.log('Broadcasting message:', message);
     const deadClients: WebSocket[] = [];
 
     clients.forEach(client => {

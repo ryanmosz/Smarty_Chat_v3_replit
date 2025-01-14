@@ -43,15 +43,22 @@ export function MessageList({ messages, onThreadClick, highlightedMessageId }: M
     }
   }, [highlightedMessageId]);
 
-  const handleReaction = (messageId: number, emoji: string) => {
+  const handleReaction = async (messageId: number, emoji: string) => {
     if (!user?.id) return;
 
-    chatWs.send({
-      type: 'reaction',
-      payload: { messageId, emoji, userId: user.id }
-    });
-
-    setShowEmojiPicker(null);
+    try {
+      chatWs.send({
+        type: 'reaction',
+        payload: { 
+          messageId, 
+          emoji, 
+          userId: user.id 
+        }
+      });
+      setShowEmojiPicker(null);
+    } catch (error) {
+      console.error('Error sending reaction:', error);
+    }
   };
 
   const formatDate = (dateString: string | Date | null) => {
@@ -75,12 +82,21 @@ export function MessageList({ messages, onThreadClick, highlightedMessageId }: M
           const userInitials = username.slice(0, 2).toUpperCase();
           const isHighlighted = message.id === highlightedMessageId;
 
-          // Group reactions by emoji
+          // Group reactions by emoji and count them
           const reactionGroups = message.reactions?.reduce((acc, reaction) => {
             if (!reaction.emoji) return acc;
-            acc[reaction.emoji] = (acc[reaction.emoji] || 0) + 1;
+            if (!acc[reaction.emoji]) {
+              acc[reaction.emoji] = {
+                count: 0,
+                users: new Set()
+              };
+            }
+            acc[reaction.emoji].count++;
+            if (reaction.userId) {
+              acc[reaction.emoji].users.add(reaction.userId);
+            }
             return acc;
-          }, {} as Record<string, number>) || {};
+          }, {} as Record<string, { count: number, users: Set<number> }>) || {};
 
           return (
             <div
@@ -111,12 +127,14 @@ export function MessageList({ messages, onThreadClick, highlightedMessageId }: M
                   </span>
                 </div>
                 <div className="mt-1 break-words">{message.content}</div>
+
+                {/* Reactions and action buttons */}
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   {/* Display reaction groups */}
-                  {Object.entries(reactionGroups).map(([emoji, count]) => (
+                  {Object.entries(reactionGroups).map(([emoji, { count, users }]) => (
                     <Button
                       key={emoji}
-                      variant="ghost"
+                      variant={user?.id && users.has(user.id) ? "default" : "ghost"}
                       size="sm"
                       className="h-6 px-2 text-sm"
                       onClick={() => handleReaction(message.id, emoji)}
@@ -156,6 +174,7 @@ export function MessageList({ messages, onThreadClick, highlightedMessageId }: M
                     </PopoverContent>
                   </Popover>
 
+                  {/* Thread button */}
                   {onThreadClick && (
                     <Button
                       variant="ghost"
