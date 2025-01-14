@@ -1,7 +1,8 @@
-import { pgTable, text, serial, integer, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, index } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { relations } from "drizzle-orm";
 import { z } from "zod";
+import { sql } from "drizzle-orm";
 
 // Users table
 export const users = pgTable("users", {
@@ -9,11 +10,13 @@ export const users = pgTable("users", {
   username: text("username").unique().notNull(),
   password: text("password").notNull(),
   status: text("status").default("offline").notNull(),
-  customStatus: text("custom_status").default("online"),  // 'online', 'busy', 'snooze', 'offline'
+  customStatus: text("custom_status").default("online"),
   avatarUrl: text("avatar_url"),
   avatarColor: text("avatar_color"),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => ({
+  usernameSearchIdx: index("username_search_idx").on(table.username),
+}));
 
 // Color tracking table
 export const colorAssignments = pgTable("color_assignments", {
@@ -29,7 +32,9 @@ export const channels = pgTable("channels", {
   description: text("description"),
   createdAt: timestamp("created_at").defaultNow(),
   createdById: integer("created_by_id").references(() => users.id),
-});
+}, (table) => ({
+  nameSearchIdx: index("channel_name_search_idx").on(table.name),
+}));
 
 // Messages table
 export const messages = pgTable("messages", {
@@ -41,9 +46,11 @@ export const messages = pgTable("messages", {
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   isDeleted: boolean("is_deleted").default(false),
-});
+}, (table) => ({
+  contentSearchIdx: index("message_content_search_idx").on(table.content),
+}));
 
-// Direct Messages
+// Direct Messages table
 export const directMessages = pgTable("direct_messages", {
   id: serial("id").primaryKey(),
   fromUserId: integer("from_user_id").references(() => users.id),
@@ -51,9 +58,11 @@ export const directMessages = pgTable("direct_messages", {
   content: text("content").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   isDeleted: boolean("is_deleted").default(false),
-});
+}, (table) => ({
+  contentSearchIdx: index("dm_content_search_idx").on(table.content),
+}));
 
-// Message Reactions
+// Message Reactions table
 export const reactions = pgTable("reactions", {
   id: serial("id").primaryKey(),
   messageId: integer("message_id").references(() => messages.id),
@@ -67,7 +76,6 @@ export const userRelations = relations(users, ({ many }) => ({
   messages: many(messages),
   sentDirectMessages: many(directMessages, { relationName: "fromUser" }),
   receivedDirectMessages: many(directMessages, { relationName: "toUser" }),
-  reactions: many(reactions),
 }));
 
 export const channelRelations = relations(channels, ({ one, many }) => ({
@@ -117,15 +125,8 @@ export const reactionRelations = relations(reactions, ({ one }) => ({
   }),
 }));
 
-// Base schemas
-const baseUserSchema = createInsertSchema(users);
-
-// Enhanced schemas with additional validation
-export const insertUserSchema = baseUserSchema.extend({
-  username: z.string().min(1),
-  password: z.string().min(1),
-});
-
+// Re-export schemas and types
+export const insertUserSchema = createInsertSchema(users);
 export const selectUserSchema = createSelectSchema(users);
 export const insertChannelSchema = createInsertSchema(channels);
 export const selectChannelSchema = createSelectSchema(channels);
@@ -134,7 +135,6 @@ export const selectMessageSchema = createSelectSchema(messages);
 export const insertDirectMessageSchema = createInsertSchema(directMessages);
 export const selectDirectMessageSchema = createSelectSchema(directMessages);
 
-// Type exports
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Message = typeof messages.$inferSelect;

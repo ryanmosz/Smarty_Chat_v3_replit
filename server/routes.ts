@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { db } from "@db";
 import { channels, messages, users, directMessages } from "@db/schema";
-import { eq, or, sql, ilike } from "drizzle-orm";
+import { eq, or, sql } from "drizzle-orm";
 import { setupWebSocket } from "./websocket";
 import multer from "multer";
 import path from "path";
@@ -215,9 +215,9 @@ export function registerRoutes(app: Express): Server {
       });
 
       // Get unique conversations (latest message for each user pair)
-      const conversationMap = new Map<string, any>(); 
+      const conversationMap = new Map<string, any>();
       allDirectMessages.forEach(dm => {
-        if (dm.fromUserId && dm.toUserId) { 
+        if (dm.fromUserId && dm.toUserId) {
           const key = `${Math.min(dm.fromUserId, dm.toUserId)}-${Math.max(dm.fromUserId, dm.toUserId)}`;
           if (!conversationMap.has(key) && !dm.isDeleted) {
             conversationMap.set(key, dm);
@@ -234,7 +234,6 @@ export function registerRoutes(app: Express): Server {
   });
 
 
-  // Add search endpoint
   app.get("/api/search", async (req, res) => {
     try {
       const query = req.query.q as string;
@@ -242,59 +241,51 @@ export function registerRoutes(app: Express): Server {
         return res.json({ channels: [], messages: [], directMessages: [] });
       }
 
-      console.log('Search query:', query);
-
-      const likePattern = `%${query.toLowerCase()}%`;
+      // Create search pattern
+      const pattern = `%${query.trim().toLowerCase()}%`;
 
       // Search channels
       const foundChannels = await db
         .select({
           id: channels.id,
           name: channels.name,
-          description: channels.description
+          description: channels.description,
         })
         .from(channels)
-        .where(or(
-          ilike(channels.name, likePattern),
-          ilike(channels.description || '', likePattern)
-        ))
-        .orderBy(channels.name)
+        .where(
+          sql`LOWER(${channels.name}) LIKE ${pattern} OR LOWER(COALESCE(${channels.description}, '')) LIKE ${pattern}`
+        )
         .limit(5);
-
-      console.log('Found channels:', foundChannels);
 
       // Search messages
       const foundMessages = await db
         .select({
           id: messages.id,
           content: messages.content,
-          createdAt: messages.createdAt,
           channelId: messages.channelId,
-          userId: messages.userId
+          userId: messages.userId,
+          createdAt: messages.createdAt,
         })
         .from(messages)
-        .where(ilike(messages.content, likePattern))
-        .orderBy(sql`${messages.createdAt} DESC`)
+        .where(
+          sql`LOWER(${messages.content}) LIKE ${pattern}`
+        )
         .limit(5);
 
-      console.log('Found messages:', foundMessages);
-
-      // Get user data for messages
-      const userIds = foundMessages.map(m => m.userId).filter((id): id is number => id != null);
-      console.log('User IDs:', userIds);
-
-      const messageUsers = userIds.length > 0 
+      // Get users for messages
+      const userIds = foundMessages.map(m => m.userId).filter(Boolean);
+      const messageUsers = userIds.length > 0
         ? await db
             .select()
             .from(users)
-            .where(eq(users.id, userIds[0])) 
+            .where(
+              sql`${users.id} IN (${sql.join(userIds)})`
+            )
         : [];
-
-      console.log('Message users:', messageUsers);
 
       const messagesWithUsers = foundMessages.map(message => ({
         ...message,
-        user: messageUsers.find(u => u.id === message.userId)
+        user: messageUsers.find(u => u.id === message.userId),
       }));
 
       // Search direct messages
@@ -302,51 +293,52 @@ export function registerRoutes(app: Express): Server {
         .select({
           id: directMessages.id,
           content: directMessages.content,
-          createdAt: directMessages.createdAt,
           fromUserId: directMessages.fromUserId,
-          toUserId: directMessages.toUserId
+          toUserId: directMessages.toUserId,
+          createdAt: directMessages.createdAt,
         })
         .from(directMessages)
-        .where(ilike(directMessages.content, likePattern))
-        .orderBy(sql`${directMessages.createdAt} DESC`)
+        .where(
+          sql`LOWER(${directMessages.content}) LIKE ${pattern}`
+        )
         .limit(5);
 
-      console.log('Found direct messages:', foundDirectMessages);
-
-      const dmUserIds = foundDirectMessages.flatMap(dm => [
-        dm.fromUserId,
-        dm.toUserId
-      ]).filter((id): id is number => id != null);
+      // Get users for direct messages
+      const dmUserIds = Array.from(new Set(
+        foundDirectMessages.flatMap(dm => [
+          dm.fromUserId,
+          dm.toUserId
+        ]).filter(Boolean)
+      ));
 
       const dmUsers = dmUserIds.length > 0
         ? await db
             .select()
             .from(users)
-            .where(eq(users.id, dmUserIds[0])) 
+            .where(
+              sql`${users.id} IN (${sql.join(dmUserIds)})`
+            )
         : [];
 
       const directMessagesWithUsers = foundDirectMessages.map(dm => ({
         ...dm,
         fromUser: dmUsers.find(u => u.id === dm.fromUserId),
-        toUser: dmUsers.find(u => u.id === dm.toUserId)
+        toUser: dmUsers.find(u => u.id === dm.toUserId),
       }));
 
-      const response = {
+      res.json({
         channels: foundChannels,
         messages: messagesWithUsers,
-        directMessages: directMessagesWithUsers
-      };
-
-      console.log('Search response:', response);
-      res.json(response);
+        directMessages: directMessagesWithUsers,
+      });
     } catch (error) {
-      console.error('Error searching:', error);
-      res.status(500).json({ 
+      console.error('Search error:', error);
+      res.status(500).json({
         message: 'Failed to search',
         error: error instanceof Error ? error.message : 'Unknown error',
         channels: [],
         messages: [],
-        directMessages: []
+        directMessages: [],
       });
     }
   });
