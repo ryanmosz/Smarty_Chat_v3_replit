@@ -244,7 +244,11 @@ export function registerRoutes(app: Express): Server {
 
       console.log('Processing search query:', query);
 
-      // Search messages with both full word and prefix matching
+      // Simple text search with LIKE operator
+      const searchPattern = `%${query.toLowerCase()}%`;
+      console.log('Using search pattern:', searchPattern);
+
+      // Search messages with simple LIKE query
       const foundMessages = await db
         .select({
           id: messages.id,
@@ -254,11 +258,7 @@ export function registerRoutes(app: Express): Server {
           createdAt: messages.createdAt,
         })
         .from(messages)
-        .where(sql`
-          content_tsv @@ plainto_tsquery('english', ${query})
-          OR content_tsv @@ to_tsquery('english', ${query + ':*'})
-          OR LOWER(content) LIKE ${`%${query.toLowerCase()}%`}
-        `)
+        .where(sql`LOWER(content) LIKE ${searchPattern}`)
         .orderBy(messages.createdAt)
         .limit(10);
 
@@ -273,7 +273,7 @@ export function registerRoutes(app: Express): Server {
         messageUsers = await db
           .select()
           .from(users)
-          .where(sql`id = ANY(${sql.join(userIds.map(String))})::int[]`);
+          .where(sql`id = ANY(ARRAY[${sql.join(userIds.map(String))}]::int[])`);
       }
 
       console.log('Found users:', messageUsers);
@@ -285,7 +285,6 @@ export function registerRoutes(app: Express): Server {
 
       console.log('Final messages with users:', messagesWithUsers);
 
-      // For now, just return messages to verify the search is working
       res.json({
         channels: [],
         messages: messagesWithUsers,
