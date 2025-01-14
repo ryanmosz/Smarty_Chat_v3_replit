@@ -72,9 +72,10 @@ export const emojiCategories = pgTable("emoji_categories", {
   description: text("description"),
   displayOrder: integer("display_order").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Emojis table
+// Emojis table - updated with required timestamps
 export const emojis = pgTable("emojis", {
   id: serial("id").primaryKey(),
   shortcode: text("shortcode").unique().notNull(),
@@ -166,7 +167,6 @@ export const emojiRelations = relations(emojis, ({ one, many }) => ({
   reactions: many(reactions),
 }));
 
-// Updated reaction relations
 export const reactionRelations = relations(reactions, ({ one }) => ({
   user: one(users, {
     fields: [reactions.userId],

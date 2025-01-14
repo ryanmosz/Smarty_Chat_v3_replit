@@ -7,7 +7,7 @@ import { eq } from 'drizzle-orm';
 
 type WebSocketMessage = {
   type: 'message' | 'typing' | 'channel_created' | 'channel_deleted' | 'message_deleted' | 
-        'direct_message' | 'direct_message_deleted' | 'user_status' | 'error';
+        'direct_message' | 'direct_message_deleted' | 'user_status' | 'error' | 'reaction';
   payload: any;
 };
 

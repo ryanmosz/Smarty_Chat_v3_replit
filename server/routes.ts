@@ -416,11 +416,19 @@ export function registerRoutes(app: Express): Server {
         })
         .returning();
 
+      // Get the message to include channel info in broadcast
+      const [message] = await db.query.messages.findMany({
+        where: eq(messages.id, messageId),
+        limit: 1,
+      });
+
       // Broadcast reaction update
       wss.broadcast({
-        type: 'reaction_added',
+        type: 'reaction',
         payload: {
           ...reaction,
+          channelId: message.channelId,
+          threadParentId: message.threadParentId,
           user: req.user,
         },
       });
