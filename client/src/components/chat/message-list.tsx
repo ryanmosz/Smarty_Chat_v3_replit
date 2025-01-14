@@ -4,7 +4,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageSquare } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import type { Message, User } from "@db/schema";
-import { useChat } from "@/hooks/use-chat";
 import { format } from "date-fns";
 import { useUser } from "@/hooks/use-user";
 
@@ -15,15 +14,24 @@ interface MessageWithUser extends Message {
 interface MessageListProps {
   messages: MessageWithUser[];
   onThreadClick?: (message: MessageWithUser) => void;
+  highlightedMessageId?: number;
 }
 
-export function MessageList({ messages, onThreadClick }: MessageListProps) {
+export function MessageList({ messages, onThreadClick, highlightedMessageId }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const highlightedRef = useRef<HTMLDivElement>(null);
   const { user } = useUser();
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Scroll to highlighted message when it changes
+  useEffect(() => {
+    if (highlightedMessageId && highlightedRef.current) {
+      highlightedRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [highlightedMessageId]);
 
   return (
     <ScrollArea className="flex-1 p-4">
@@ -32,9 +40,17 @@ export function MessageList({ messages, onThreadClick }: MessageListProps) {
           const username = message.user?.username || 'Unknown';
           const avatarColor = message.user?.avatarColor || 'hsl(0, 0%, 90%)';
           const userInitials = username.slice(0, 2).toUpperCase();
+          const isHighlighted = message.id === highlightedMessageId;
 
           return (
-            <div key={message.id} className="flex items-start gap-3 group">
+            <div
+              key={message.id}
+              id={`message-${message.id}`}
+              ref={isHighlighted ? highlightedRef : undefined}
+              className={`flex items-start gap-3 group ${
+                isHighlighted ? 'bg-accent/20 -mx-4 px-4 py-2 rounded-md transition-colors duration-500' : ''
+              }`}
+            >
               <Avatar 
                 className="h-8 w-8 mt-1"
                 style={{ backgroundColor: avatarColor }}

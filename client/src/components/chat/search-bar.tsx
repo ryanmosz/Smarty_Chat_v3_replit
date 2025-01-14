@@ -24,7 +24,6 @@ export function SearchBar() {
   useEffect(() => {
     const handler = setTimeout(() => {
       if (query.trim().length >= 2) {
-        console.log('Setting debounced query:', query);
         setDebouncedQuery(query);
         setShowResults(true);
       } else {
@@ -39,40 +38,25 @@ export function SearchBar() {
     queryKey: ['/api/search', debouncedQuery],
     queryFn: async () => {
       if (!debouncedQuery.trim()) {
-        console.log('Empty query, returning empty results');
         return { channels: [], messages: [], directMessages: [] };
       }
 
-      console.log('Fetching search results for:', debouncedQuery);
       const response = await fetch(`/api/search?q=${encodeURIComponent(debouncedQuery)}`);
 
       if (!response.ok) {
-        console.error('Search request failed:', response.status, response.statusText);
         throw new Error('Search failed');
       }
 
-      const data = await response.json();
-      console.log('Search results:', data);
-      return data;
+      return response.json();
     },
     enabled: debouncedQuery.trim().length >= 2,
-    staleTime: 0, // Always fetch fresh results
+    staleTime: 0,
     retry: 1,
   });
 
   const handleMessageClick = (channelId: number, messageId: number) => {
-    console.log('Navigating to message:', { channelId, messageId });
-    // Update to use the /channel/:channelId route format
-    setLocation(`/channel/${channelId}`);
-    // Use setTimeout to ensure the navigation completes before scrolling
-    setTimeout(() => {
-      const messageElement = document.getElementById(`message-${messageId}`);
-      if (messageElement) {
-        messageElement.scrollIntoView({ behavior: 'smooth' });
-        messageElement.classList.add('highlight');
-        setTimeout(() => messageElement.classList.remove('highlight'), 2000);
-      }
-    }, 100);
+    // Navigate to channel with message ID in URL
+    setLocation(`/channel/${channelId}?message=${messageId}`);
     setShowResults(false);
     setQuery("");
   };
@@ -103,7 +87,7 @@ export function SearchBar() {
               <div className="flex items-center justify-center py-4">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
-            ) : searchResults?.messages?.length > 0 ? (
+            ) : searchResults?.messages?.length ? (
               <div>
                 <h3 className="font-semibold mb-2 text-sm">Messages</h3>
                 <div className="space-y-2">

@@ -5,13 +5,21 @@ import { DirectMessageList } from "@/components/chat/direct-message-list";
 import { MessageList } from "@/components/chat/message-list";
 import { MessageInput } from "@/components/chat/message-input";
 import { ChatHeader } from "@/components/chat/chat-header";
-import type { Message } from "@db/schema";
+import type { Message, User } from "@db/schema";
+import { useLocation } from "wouter";
+
+interface MessageWithUser extends Message {
+  user?: User;
+}
 
 export default function ChatPage() {
   const [selectedChannelId, setSelectedChannelId] = useState<number>();
   const [selectedUserId, setSelectedUserId] = useState<number>();
-  const [threadMessage, setThreadMessage] = useState<Message>();
+  const [threadMessage, setThreadMessage] = useState<MessageWithUser>();
   const [showChannels, setShowChannels] = useState(true);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<number>();
+  const [location] = useLocation();
+
   const { 
     channels = [], 
     users = [], 
@@ -23,6 +31,30 @@ export default function ChatPage() {
   const { data: channelMessages = [] } = getChannelMessages(selectedChannelId || 0);
   const { data: directMessages = [] } = getDirectMessages(selectedUserId || 0);
   const { data: threadMessages = [] } = getThreadMessages(threadMessage?.id || 0);
+
+  // Extract channel ID and message ID from URL
+  useEffect(() => {
+    // Parse channel ID from path
+    const channelMatch = location.match(/\/channel\/(\d+)/);
+    if (channelMatch) {
+      const channelId = parseInt(channelMatch[1], 10);
+      setSelectedChannelId(channelId);
+
+      // Parse message ID from query params
+      const searchParams = new URLSearchParams(window.location.search);
+      const messageId = searchParams.get('message');
+      if (messageId) {
+        setHighlightedMessageId(parseInt(messageId, 10));
+      } else {
+        setHighlightedMessageId(undefined);
+      }
+    }
+  }, [location]);
+
+  // Reset highlighted message when changing channels
+  useEffect(() => {
+    setHighlightedMessageId(undefined);
+  }, [selectedChannelId, selectedUserId]);
 
   // Reset thread view when changing channels or DMs
   useEffect(() => {
@@ -94,6 +126,7 @@ export default function ChatPage() {
                     <MessageList
                       messages={[threadMessage, ...threadMessages]}
                       onThreadClick={undefined}
+                      highlightedMessageId={highlightedMessageId}
                     />
                     <MessageInput 
                       channelId={selectedChannelId} 
@@ -105,6 +138,7 @@ export default function ChatPage() {
                     <MessageList
                       messages={channelMessages}
                       onThreadClick={setThreadMessage}
+                      highlightedMessageId={highlightedMessageId}
                     />
                     <MessageInput 
                       channelId={selectedChannelId}
@@ -117,6 +151,7 @@ export default function ChatPage() {
                 <MessageList
                   messages={messages}
                   onThreadClick={undefined}
+                  highlightedMessageId={highlightedMessageId}
                 />
                 <MessageInput 
                   toUserId={selectedUserId}
