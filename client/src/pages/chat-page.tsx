@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useChat } from "@/hooks/use-chat";
 import { ChannelList } from "@/components/chat/channel-list";
 import { MessageList } from "@/components/chat/message-list";
@@ -12,6 +12,11 @@ export default function ChatPage() {
   const { channels = [], getChannelMessages, getThreadMessages } = useChat();
   const { data: channelMessages = [] } = getChannelMessages(selectedChannelId || 0);
   const { data: threadMessages = [] } = getThreadMessages(threadMessage?.id || 0);
+
+  // Reset thread view when changing channels
+  useEffect(() => {
+    setThreadMessage(undefined);
+  }, [selectedChannelId]);
 
   return (
     <div className="h-screen flex">
