@@ -218,23 +218,10 @@ export function useChat() {
       // Update both channel messages and thread messages on success
       const messageId = variables.messageId;
 
-      // Update channel messages
-      queryClient.setQueryData<MessageWithUser[]>([`/api/channels/${data.channelId}/messages`], (oldMessages) => {
-        if (!oldMessages) return oldMessages;
-        return oldMessages.map(message => {
-          if (message.id === messageId) {
-            return {
-              ...message,
-              reactions: [...(message.reactions || []), data],
-            };
-          }
-          return message;
-        });
-      });
-
-      // Update thread messages if applicable
-      if (data.threadParentId) {
-        queryClient.setQueryData<MessageWithUser[]>([`/api/messages/${data.threadParentId}/thread`], (oldMessages) => {
+      // Update channel messages if it exists in any channel
+      const channelQueryKeys = queryClient.getQueryCache().findAll(['api/channels']);
+      channelQueryKeys.forEach(query => {
+        queryClient.setQueryData<MessageWithUser[]>(query.queryKey, (oldMessages) => {
           if (!oldMessages) return oldMessages;
           return oldMessages.map(message => {
             if (message.id === messageId) {
@@ -246,7 +233,24 @@ export function useChat() {
             return message;
           });
         });
-      }
+      });
+
+      // Update thread messages if applicable
+      const threadQueryKeys = queryClient.getQueryCache().findAll(['/api/messages']);
+      threadQueryKeys.forEach(query => {
+        queryClient.setQueryData<MessageWithUser[]>(query.queryKey, (oldMessages) => {
+          if (!oldMessages) return oldMessages;
+          return oldMessages.map(message => {
+            if (message.id === messageId) {
+              return {
+                ...message,
+                reactions: [...(message.reactions || []), data],
+              };
+            }
+            return message;
+          });
+        });
+      });
     },
   });
 
@@ -328,8 +332,11 @@ export function useChat() {
         case 'reaction': {
           const { messageId, channelId, threadParentId } = message.payload;
           if (threadParentId) {
+            // Update thread messages
             queryClient.invalidateQueries({ queryKey: [`/api/messages/${threadParentId}/thread`] });
-          } else {
+          }
+          if (channelId) {
+            // Update channel messages
             queryClient.invalidateQueries({ queryKey: [`/api/channels/${channelId}/messages`] });
           }
           break;
