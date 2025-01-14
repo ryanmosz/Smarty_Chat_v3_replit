@@ -1,12 +1,11 @@
 import { useState } from "react";
 import { useUser } from "@/hooks/use-user";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Logo } from "@/components/ui/logo";
 
 export default function AuthPage() {
   const [username, setUsername] = useState("");
@@ -65,11 +64,8 @@ export default function AuthPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <Card className="w-full max-w-md mx-4">
-        <CardHeader className="text-center space-y-4">
-          <div className="flex justify-center">
-            <Logo className="w-24 h-24" />
-          </div>
-          <h1 className="text-2xl font-bold">AI Chat Assistant</h1>
+        <CardHeader className="text-center">
+          <CardTitle>Welcome to Smarty Chat</CardTitle>
         </CardHeader>
         <CardContent>
           <Tabs 
