@@ -244,36 +244,83 @@ export function registerRoutes(app: Express): Server {
 
       const likeQuery = `%${query}%`;
 
-      // Search channels
+      // Search channels - simple search
       const foundChannels = await db
-        .select()
+        .select({
+          id: channels.id,
+          name: channels.name,
+          description: channels.description
+        })
         .from(channels)
         .where(ilike(channels.name, likeQuery))
+        .orderBy(channels.name)
         .limit(5);
 
-      // Search messages with user data
-      const foundMessages = await db.query.messages.findMany({
-        where: ilike(messages.content, likeQuery),
-        with: {
-          user: true
-        },
-        limit: 5
-      });
+      // Search messages - simplified search
+      const foundMessages = await db
+        .select({
+          id: messages.id,
+          content: messages.content,
+          createdAt: messages.createdAt,
+          channelId: messages.channelId,
+          userId: messages.userId
+        })
+        .from(messages)
+        .where(ilike(messages.content, likeQuery))
+        .orderBy(sql`${messages.createdAt} DESC`)
+        .limit(5);
 
-      // Search direct messages with user data
-      const foundDirectMessages = await db.query.directMessages.findMany({
-        where: ilike(directMessages.content, likeQuery),
-        with: {
-          fromUser: true,
-          toUser: true
-        },
-        limit: 5
-      });
+      // Get user data for messages
+      const userIds = foundMessages.map(m => m.userId).filter(Boolean);
+      const messageUsers = userIds.length > 0 
+        ? await db
+            .select()
+            .from(users)
+            .where(sql`${users.id} = ANY(${sql`ARRAY[${userIds.join(',')}]`})`)
+        : [];
+
+      const messagesWithUsers = foundMessages.map(message => ({
+        ...message,
+        user: messageUsers.find(u => u.id === message.userId)
+      }));
+
+      // Search direct messages - simplified search
+      const foundDirectMessages = await db
+        .select({
+          id: directMessages.id,
+          content: directMessages.content,
+          createdAt: directMessages.createdAt,
+          fromUserId: directMessages.fromUserId,
+          toUserId: directMessages.toUserId
+        })
+        .from(directMessages)
+        .where(ilike(directMessages.content, likeQuery))
+        .orderBy(sql`${directMessages.createdAt} DESC`)
+        .limit(5);
+
+      // Get user data for direct messages
+      const dmUserIds = [...new Set([
+        ...foundDirectMessages.map(dm => dm.fromUserId),
+        ...foundDirectMessages.map(dm => dm.toUserId)
+      ])].filter(Boolean);
+
+      const dmUsers = dmUserIds.length > 0
+        ? await db
+            .select()
+            .from(users)
+            .where(sql`${users.id} = ANY(${sql`ARRAY[${dmUserIds.join(',')}]`})`)
+        : [];
+
+      const directMessagesWithUsers = foundDirectMessages.map(dm => ({
+        ...dm,
+        fromUser: dmUsers.find(u => u.id === dm.fromUserId),
+        toUser: dmUsers.find(u => u.id === dm.toUserId)
+      }));
 
       res.json({
         channels: foundChannels || [],
-        messages: foundMessages || [],
-        directMessages: foundDirectMessages || []
+        messages: messagesWithUsers || [],
+        directMessages: directMessagesWithUsers || []
       });
     } catch (error) {
       console.error('Error searching:', error);
