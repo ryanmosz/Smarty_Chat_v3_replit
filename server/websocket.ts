@@ -1,13 +1,13 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { Server } from 'http';
 import { db } from '@db';
-import { messages, directMessages, users } from '@db/schema';
+import { messages, directMessages, users, reactions } from '@db/schema';
 import { parse as parseUrl } from 'url';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 
 type WebSocketMessage = {
   type: 'message' | 'typing' | 'channel_created' | 'channel_deleted' | 'message_deleted' | 
-        'direct_message' | 'direct_message_deleted' | 'user_status' | 'error';
+        'direct_message' | 'direct_message_deleted' | 'reaction' | 'reaction_deleted' | 'error' | 'user_status';
   payload: any;
 };
 
@@ -33,7 +33,6 @@ export function setupWebSocket(server: Server) {
       const userId = parseInt(query.userId as string);
       if (!isNaN(userId)) {
         wss.handleUpgrade(request, socket, head, async (ws) => {
-          // Set user status to online immediately upon connection
           try {
             await db
               .update(users)
@@ -43,7 +42,6 @@ export function setupWebSocket(server: Server) {
               })
               .where(eq(users.id, userId));
 
-            // Broadcast the status change immediately
             broadcast({
               type: 'user_status',
               payload: {
@@ -75,7 +73,6 @@ export function setupWebSocket(server: Server) {
           case 'user_status': {
             const { userId, status } = message.payload;
             try {
-              // Update both status fields
               await db
                 .update(users)
                 .set({ 
@@ -84,7 +81,6 @@ export function setupWebSocket(server: Server) {
                 })
                 .where(eq(users.id, userId));
 
-              // Broadcast to all connected clients immediately
               broadcast({
                 type: 'user_status',
                 payload: { userId, status }
@@ -115,7 +111,12 @@ export function setupWebSocket(server: Server) {
               const [messageWithUser] = await db.query.messages.findMany({
                 where: eq(messages.id, newMessage.id),
                 with: {
-                  user: true
+                  user: true,
+                  reactions: {
+                    with: {
+                      user: true
+                    }
+                  }
                 },
                 limit: 1
               });
@@ -130,7 +131,81 @@ export function setupWebSocket(server: Server) {
             }
             break;
           }
+          case 'reaction': {
+            const { messageId, emoji, userId } = message.payload;
 
+            try {
+              // Get message context first
+              const [targetMessage] = await db.query.messages.findMany({
+                where: eq(messages.id, messageId),
+                limit: 1
+              });
+
+              if (!targetMessage) {
+                ws.send(JSON.stringify({ 
+                  type: 'error', 
+                  payload: 'Message not found' 
+                }));
+                return;
+              }
+
+              // Check if reaction already exists
+              const existingReaction = await db.query.reactions.findFirst({
+                where: sql`${reactions.messageId} = ${messageId} AND ${reactions.userId} = ${userId} AND ${reactions.emoji} = ${emoji}`
+              });
+
+              if (existingReaction) {
+                // Remove reaction if it exists
+                await db.delete(reactions)
+                  .where(eq(reactions.id, existingReaction.id))
+                  .returning();
+
+                broadcast({
+                  type: 'reaction_deleted',
+                  payload: { 
+                    messageId, 
+                    emoji, 
+                    userId,
+                    channelId: targetMessage.channelId,
+                    threadParentId: targetMessage.threadParentId
+                  }
+                });
+              } else {
+                // Add new reaction
+                const [newReaction] = await db
+                  .insert(reactions)
+                  .values({ messageId, emoji, userId })
+                  .returning();
+
+                const [reactionWithUser] = await db.query.reactions.findMany({
+                  where: eq(reactions.id, newReaction.id),
+                  with: {
+                    user: true
+                  },
+                  limit: 1
+                });
+
+                broadcast({ 
+                  type: 'reaction', 
+                  payload: {
+                    ...reactionWithUser,
+                    channelId: targetMessage.channelId,
+                    threadParentId: targetMessage.threadParentId
+                  }
+                });
+              }
+            } catch (error) {
+              console.error('Error handling reaction:', error);
+              ws.send(JSON.stringify({ 
+                type: 'error', 
+                payload: 'Failed to handle reaction' 
+              }));
+            }
+            break;
+          }
+          case 'reaction_deleted':
+            //This case is handled implicitly within the 'reaction' case above
+            break;
           case 'message_deleted': {
             const { id } = message.payload;
             try {

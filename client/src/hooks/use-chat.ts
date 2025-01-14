@@ -214,6 +214,16 @@ export function useChat() {
           }
           break;
         }
+        case 'reaction':
+        case 'reaction_deleted': {
+          const { messageId, threadParentId, channelId } = message.payload;
+          if (threadParentId) {
+            queryClient.invalidateQueries({ queryKey: [`/api/messages/${threadParentId}/thread`] });
+          } else if (channelId) {
+            queryClient.invalidateQueries({ queryKey: [`/api/channels/${channelId}/messages`] });
+          }
+          break;
+        }
         case 'user_status': {
           const { userId, status } = message.payload;
 
