@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Hash, Plus, Trash2 } from "lucide-react";
+import { Hash, Plus, Trash2, ChevronDown, ChevronRight } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -28,6 +28,7 @@ export function ChannelList({
   onChannelSelect,
 }: ChannelListProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [showChannels, setShowChannels] = useState(true);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const { toast } = useToast();
@@ -81,7 +82,6 @@ export function ChannelList({
         throw new Error(await response.text());
       }
 
-      // If this was the selected channel, clear the selection
       if (selectedChannelId === channelId) {
         onChannelSelect(0);
       }
@@ -101,9 +101,23 @@ export function ChannelList({
   };
 
   return (
-    <div className="w-60 border-r bg-background">
-      <div className="p-4 flex items-center justify-between">
-        <h2 className="font-semibold">Channels</h2>
+    <div className="flex flex-col h-full border-r bg-background">
+      <div className="p-4 flex items-center justify-between border-b">
+        <div className="flex items-center gap-2">
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={() => setShowChannels(!showChannels)}
+            className="p-0 h-5 w-5"
+          >
+            {showChannels ? (
+              <ChevronDown className="h-4 w-4" />
+            ) : (
+              <ChevronRight className="h-4 w-4" />
+            )}
+          </Button>
+          <span className="font-semibold">Channels</span>
+        </div>
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
           <DialogTrigger asChild>
             <Button variant="ghost" size="icon">
@@ -143,43 +157,41 @@ export function ChannelList({
                   onChange={(e) => setDescription(e.target.value)}
                 />
               </div>
-              <Button 
-                type="submit"
-                disabled={!name.trim()}
-              >
+              <Button type="submit" disabled={!name.trim()}>
                 Create Channel
               </Button>
             </form>
           </DialogContent>
         </Dialog>
       </div>
-      <ScrollArea className="h-[calc(100vh-10rem)]">
-        <div className="space-y-1 p-2">
-          {channels.map((channel) => (
-            <div key={channel.id} className="flex items-center gap-2">
-              <Button
-                variant={channel.id === selectedChannelId ? "secondary" : "ghost"}
-                className="w-full justify-start"
-                onClick={() => onChannelSelect(channel.id)}
-              >
-                <Hash className="h-4 w-4 mr-2" />
-                {channel.name}
-              </Button>
-              {/* Only show delete button if user created the channel */}
-              {user?.id === channel.createdById && (
+      <div className={`flex-1 overflow-hidden transition-all duration-200 ${showChannels ? 'h-auto' : 'h-0'}`}>
+        <ScrollArea className="h-full">
+          <div className="space-y-1 p-2">
+            {channels.map((channel) => (
+              <div key={channel.id} className="flex items-center gap-2">
                 <Button
-                  variant="ghost"
-                  size="icon"
-                  className="shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                  onClick={() => handleDeleteChannel(channel.id)}
+                  variant={channel.id === selectedChannelId ? "secondary" : "ghost"}
+                  className="w-full justify-start"
+                  onClick={() => onChannelSelect(channel.id)}
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Hash className="h-4 w-4 mr-2" />
+                  {channel.name}
                 </Button>
-              )}
-            </div>
-          ))}
-        </div>
-      </ScrollArea>
+                {user?.id === channel.createdById && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={() => handleDeleteChannel(channel.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+        </ScrollArea>
+      </div>
     </div>
   );
 }
