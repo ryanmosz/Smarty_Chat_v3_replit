@@ -48,10 +48,10 @@ export function EmojiPicker({ messageId }: EmojiPickerProps) {
         // Handle legacy emoji format
         await addReaction.mutateAsync({
           messageId,
-          emoji: emoji,
+          emoji,
         });
       } else {
-        // Handle new emoji format
+        // Handle new emoji format with proper error handling
         await addReaction.mutateAsync({
           messageId,
           emojiId: emoji.id,

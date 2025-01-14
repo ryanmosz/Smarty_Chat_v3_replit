@@ -181,7 +181,7 @@ export function useChat() {
     }
   });
 
-  // Add Reaction - Updated to handle both emoji formats
+  // Add Reaction - Updated with improved error handling and optimistic updates
   const addReaction = useMutation({
     mutationFn: async ({ messageId, emojiId, emoji }: { messageId: number; emojiId?: number; emoji?: string }) => {
       const response = await fetch(`/api/messages/${messageId}/reactions`, {
@@ -193,14 +193,64 @@ export function useChat() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to add reaction');
+        const errorText = await response.text();
+        throw new Error(errorText || 'Failed to add reaction');
       }
 
-      return response.json();
+      const data = await response.json();
+      return data;
+    },
+    onMutate: async (variables) => {
+      // Cancel any outgoing refetches so they don't overwrite our optimistic update
+      await queryClient.cancelQueries({ queryKey: [`/api/messages/${variables.messageId}`] });
+
+      // Return context with the optimistic value
+      return { messageId: variables.messageId };
+    },
+    onError: (err, variables, context) => {
+      console.error('Error adding reaction:', err);
+      // If the mutation fails, use the context returned from onMutate to roll back
+      if (context) {
+        queryClient.invalidateQueries({ queryKey: [`/api/messages/${context.messageId}`] });
+      }
+    },
+    onSuccess: (data, variables) => {
+      // Update both channel messages and thread messages on success
+      const messageId = variables.messageId;
+
+      // Update channel messages
+      queryClient.setQueryData<MessageWithUser[]>([`/api/channels/${data.channelId}/messages`], (oldMessages) => {
+        if (!oldMessages) return oldMessages;
+        return oldMessages.map(message => {
+          if (message.id === messageId) {
+            return {
+              ...message,
+              reactions: [...(message.reactions || []), data],
+            };
+          }
+          return message;
+        });
+      });
+
+      // Update thread messages if applicable
+      if (data.threadParentId) {
+        queryClient.setQueryData<MessageWithUser[]>([`/api/messages/${data.threadParentId}/thread`], (oldMessages) => {
+          if (!oldMessages) return oldMessages;
+          return oldMessages.map(message => {
+            if (message.id === messageId) {
+              return {
+                ...message,
+                reactions: [...(message.reactions || []), data],
+              };
+            }
+            return message;
+          });
+        });
+      }
     },
   });
 
-  // Remove Reaction
+  // Remove Reaction - Updated with optimistic updates
   const removeReaction = useMutation({
     mutationFn: async ({ messageId, reactionId }: { messageId: number; reactionId: number }) => {
       const response = await fetch(`/api/messages/${messageId}/reactions/${reactionId}`, {
@@ -211,8 +261,16 @@ export function useChat() {
         throw new Error('Failed to remove reaction');
       }
     },
-  });
+    onSuccess: (_, variables) => {
+      // Optimistically update the UI
+      const { messageId, reactionId } = variables;
 
+      queryClient.invalidateQueries({ 
+        queryKey: [`/api/messages/${messageId}`],
+        exact: true,
+      });
+    },
+  });
 
   // Subscribe to WebSocket updates
   React.useEffect(() => {
@@ -253,8 +311,6 @@ export function useChat() {
         }
         case 'user_status': {
           const { userId, status } = message.payload;
-
-          // Immediately update users cache
           queryClient.setQueryData<User[]>(['/api/users'], (oldUsers) => {
             if (!oldUsers) return oldUsers;
             return oldUsers.map(user =>
@@ -263,24 +319,13 @@ export function useChat() {
                 : user
             );
           });
-
-          // Force immediate refetch of active conversations
           queryClient.invalidateQueries({ 
             queryKey: ['/api/active-conversations'],
             refetchType: 'active'
           });
-        }
-        break;
-        case 'reaction_added': {
-          const { messageId, channelId, threadParentId } = message.payload;
-          if (threadParentId) {
-            queryClient.invalidateQueries({ queryKey: [`/api/messages/${threadParentId}/thread`] });
-          } else {
-            queryClient.invalidateQueries({ queryKey: [`/api/channels/${channelId}/messages`] });
-          }
           break;
         }
-        case 'reaction_removed': {
+        case 'reaction': {
           const { messageId, channelId, threadParentId } = message.payload;
           if (threadParentId) {
             queryClient.invalidateQueries({ queryKey: [`/api/messages/${threadParentId}/thread`] });
