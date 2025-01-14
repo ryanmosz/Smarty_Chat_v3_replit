@@ -6,11 +6,13 @@ import {
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Smile } from "lucide-react";
+import { Smile, Loader2 } from "lucide-react";
 import { useChat } from "@/hooks/use-chat";
 import { useUser } from "@/hooks/use-user";
+import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
 import type { Emoji, EmojiCategory } from "@db/schema";
+import { useState } from "react";
 
 interface EmojiPickerProps {
   messageId: number;
@@ -19,6 +21,9 @@ interface EmojiPickerProps {
 export function EmojiPicker({ messageId }: EmojiPickerProps) {
   const { addReaction } = useChat();
   const { user } = useUser();
+  const { toast } = useToast();
+  const [isOpen, setIsOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Fetch emoji categories with their emojis
   const { data: categories = [] } = useQuery<(EmojiCategory & { emojis: Emoji[] })[]>({
@@ -43,6 +48,7 @@ export function EmojiPicker({ messageId }: EmojiPickerProps) {
   const handleEmojiClick = async (emoji: Emoji | string) => {
     if (!user) return;
 
+    setIsSubmitting(true);
     try {
       if (typeof emoji === 'string') {
         // Handle legacy emoji format
@@ -57,8 +63,20 @@ export function EmojiPicker({ messageId }: EmojiPickerProps) {
           emojiId: emoji.id,
         });
       }
+      toast({
+        description: "Reaction added successfully",
+        duration: 2000,
+      });
+      setIsOpen(false);
     } catch (error) {
       console.error('Error adding reaction:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to add reaction. Please try again.",
+      });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -66,10 +84,19 @@ export function EmojiPicker({ messageId }: EmojiPickerProps) {
   const fallbackEmojis = ["👍", "❤️", "🎉", "🚀", "👋", "😊", "🔥", "✨"];
 
   return (
-    <Popover>
+    <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="sm" className="opacity-0 group-hover:opacity-100">
-          <Smile className="h-4 w-4" />
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          className="opacity-0 group-hover:opacity-100"
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Smile className="h-4 w-4" />
+          )}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-80" align="start">
@@ -91,8 +118,9 @@ export function EmojiPicker({ messageId }: EmojiPickerProps) {
                     <Button
                       key={emoji.id}
                       variant="ghost"
-                      className="h-8 w-8 p-0"
+                      className="h-8 w-8 p-0 hover:bg-accent/50"
                       onClick={() => handleEmojiClick(emoji)}
+                      disabled={isSubmitting}
                     >
                       {emoji.unicode || (
                         <img 
@@ -109,8 +137,9 @@ export function EmojiPicker({ messageId }: EmojiPickerProps) {
                     <Button
                       key={emoji}
                       variant="ghost"
-                      className="h-8 w-8 p-0"
+                      className="h-8 w-8 p-0 hover:bg-accent/50"
                       onClick={() => handleEmojiClick(emoji)}
+                      disabled={isSubmitting}
                     >
                       {emoji}
                     </Button>
@@ -126,8 +155,9 @@ export function EmojiPicker({ messageId }: EmojiPickerProps) {
                     <Button
                       key={emoji.id}
                       variant="ghost"
-                      className="h-8 w-8 p-0"
+                      className="h-8 w-8 p-0 hover:bg-accent/50"
                       onClick={() => handleEmojiClick(emoji)}
+                      disabled={isSubmitting}
                     >
                       {emoji.unicode || (
                         <img 
