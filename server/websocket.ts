@@ -94,6 +94,7 @@ export function setupWebSocket(server: Server) {
             }
             break;
           }
+
           case 'message': {
             const { content, channelId, threadParentId, userId } = message.payload;
 
@@ -122,6 +123,41 @@ export function setupWebSocket(server: Server) {
               ws.send(JSON.stringify({ 
                 type: 'error', 
                 payload: 'Failed to create message' 
+              }));
+            }
+            break;
+          }
+
+          case 'direct_message': {
+            const { content, fromUserId, toUserId } = message.payload;
+            console.log('Processing direct message:', { content, fromUserId, toUserId });
+
+            try {
+              const [newDM] = await db
+                .insert(directMessages)
+                .values({ 
+                  content, 
+                  fromUserId, 
+                  toUserId,
+                })
+                .returning();
+
+              const [dmWithUsers] = await db.query.directMessages.findMany({
+                where: eq(directMessages.id, newDM.id),
+                with: {
+                  fromUser: true,
+                  toUser: true
+                },
+                limit: 1
+              });
+
+              console.log('Created direct message:', dmWithUsers);
+              broadcast({ type: 'direct_message', payload: dmWithUsers });
+            } catch (error) {
+              console.error('Error creating direct message:', error);
+              ws.send(JSON.stringify({ 
+                type: 'error', 
+                payload: 'Failed to create direct message' 
               }));
             }
             break;
