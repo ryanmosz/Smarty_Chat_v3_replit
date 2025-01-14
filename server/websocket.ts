@@ -44,25 +44,33 @@ export function setupWebSocket(server: Server) {
           case 'message': {
             const { content, channelId, threadParentId, userId } = message.payload;
 
-            const [newMessage] = await db
-              .insert(messages)
-              .values({ 
-                content, 
-                channelId, 
-                threadParentId,
-                userId 
-              })
-              .returning();
+            try {
+              const [newMessage] = await db
+                .insert(messages)
+                .values({ 
+                  content, 
+                  channelId, 
+                  threadParentId,
+                  userId 
+                })
+                .returning();
 
-            const [messageWithUser] = await db.query.messages.findMany({
-              where: eq(messages.id, newMessage.id),
-              with: {
-                user: true
-              },
-              limit: 1
-            });
+              const [messageWithUser] = await db.query.messages.findMany({
+                where: eq(messages.id, newMessage.id),
+                with: {
+                  user: true
+                },
+                limit: 1
+              });
 
-            broadcast({ type: 'message', payload: messageWithUser });
+              broadcast({ type: 'message', payload: messageWithUser });
+            } catch (error) {
+              console.error('Error creating message:', error);
+              ws.send(JSON.stringify({ 
+                type: 'error', 
+                payload: 'Failed to create message' 
+              }));
+            }
             break;
           }
 

@@ -130,32 +130,7 @@ export function useChat() {
           reject(error);
         }
       });
-    },
-    onMutate: async (messageId) => {
-      // Cancel any outgoing refetches
-      const channelQueryKeys = channels?.map(c => [`/api/channels/${c.id}/messages`]) || [];
-      const threadQueryKey = [`/api/messages/${messageId}/thread`];
-
-      await Promise.all([
-        ...channelQueryKeys.map(key => queryClient.cancelQueries({ queryKey: key })),
-        queryClient.cancelQueries({ queryKey: threadQueryKey })
-      ]);
-
-      // Optimistically remove the message from all queries
-      channelQueryKeys.forEach(queryKey => {
-        const messages = queryClient.getQueryData<MessageWithUser[]>(queryKey) || [];
-        queryClient.setQueryData<MessageWithUser[]>(
-          queryKey,
-          messages.filter(m => m.id !== messageId)
-        );
-      });
-
-      const threadMessages = queryClient.getQueryData<MessageWithUser[]>(threadQueryKey) || [];
-      queryClient.setQueryData<MessageWithUser[]>(
-        threadQueryKey,
-        threadMessages.filter(m => m.id !== messageId)
-      );
-    },
+    }
   });
 
   // Subscribe to WebSocket updates
@@ -166,7 +141,7 @@ export function useChat() {
         case 'channel_deleted':
           queryClient.invalidateQueries({ queryKey: ['/api/channels'] });
           break;
-        case 'message':
+        case 'message': {
           const { channelId, threadParentId } = message.payload;
 
           if (threadParentId) {
@@ -180,37 +155,38 @@ export function useChat() {
               );
             }
           } else {
-            const channelQueryKey = [`/api/channels/${channelId}/messages`];
-            const currentMessages = queryClient.getQueryData<MessageWithUser[]>(channelQueryKey) || [];
+            const msgChannelQueryKey = [`/api/channels/${channelId}/messages`];
+            const currentMessages = queryClient.getQueryData<MessageWithUser[]>(msgChannelQueryKey) || [];
 
             if (!currentMessages.some(m => m.id === message.payload.id)) {
               queryClient.setQueryData<MessageWithUser[]>(
-                channelQueryKey,
+                msgChannelQueryKey,
                 currentMessages.filter(m => typeof m.id === 'number' && m.id < 0).concat(message.payload)
               );
             }
           }
           break;
-        case 'message_deleted':
-          const messageId = message.payload.id;
-          const channelId = message.payload.channelId; // Added to get channelId from payload
+        }
+        case 'message_deleted': {
+          const { id: deletedMessageId, channelId: deletedChannelId } = message.payload;
 
           // Update channel messages
-          const channelQueryKey = [`/api/channels/${channelId}/messages`];
-          const messages = queryClient.getQueryData<MessageWithUser[]>(channelQueryKey) || [];
+          const channelMessagesKey = [`/api/channels/${deletedChannelId}/messages`];
+          const channelMessages = queryClient.getQueryData<MessageWithUser[]>(channelMessagesKey) || [];
           queryClient.setQueryData<MessageWithUser[]>(
-            channelQueryKey,
-            messages.filter(m => m.id !== messageId)
+            channelMessagesKey,
+            channelMessages.filter(m => m.id !== deletedMessageId)
           );
 
           // Update thread messages
-          const threadQueryKey = [`/api/messages/${messageId}/thread`];
-          const threadMessages = queryClient.getQueryData<MessageWithUser[]>(threadQueryKey) || [];
+          const threadMessagesKey = [`/api/messages/${deletedMessageId}/thread`];
+          const threadMessages = queryClient.getQueryData<MessageWithUser[]>(threadMessagesKey) || [];
           queryClient.setQueryData<MessageWithUser[]>(
-            threadQueryKey,
-            threadMessages.filter(m => m.id !== messageId)
+            threadMessagesKey,
+            threadMessages.filter(m => m.id !== deletedMessageId)
           );
           break;
+        }
       }
     });
 

@@ -38,7 +38,11 @@ export function MessageList({ messages, onThreadClick }: MessageListProps) {
   }, [messages]);
 
   const handleDelete = async (messageId: number) => {
-    await deleteMessage.mutateAsync(messageId);
+    try {
+      await deleteMessage.mutateAsync(messageId);
+    } catch (error) {
+      console.error('Error deleting message:', error);
+    }
   };
 
   return (
@@ -86,7 +90,6 @@ export function MessageList({ messages, onThreadClick }: MessageListProps) {
                       Thread
                     </Button>
                   )}
-                  {/* Show delete button for all messages */}
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <Button
