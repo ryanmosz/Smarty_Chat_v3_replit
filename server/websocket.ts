@@ -32,7 +32,29 @@ export function setupWebSocket(server: Server) {
     if (query.type === 'chat') {
       const userId = parseInt(query.userId as string);
       if (!isNaN(userId)) {
-        wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.handleUpgrade(request, socket, head, async (ws) => {
+          // Set user status to online immediately upon connection
+          try {
+            await db
+              .update(users)
+              .set({ 
+                status: 'online',
+                customStatus: 'online'
+              })
+              .where(eq(users.id, userId));
+
+            // Broadcast the status change immediately
+            broadcast({
+              type: 'user_status',
+              payload: {
+                userId,
+                status: 'online'
+              }
+            });
+          } catch (error) {
+            console.error('Error setting initial user status:', error);
+          }
+
           (ws as WebSocketClient).userId = userId;
           wss.emit('connection', ws, request);
         });
@@ -44,31 +66,6 @@ export function setupWebSocket(server: Server) {
     console.log('Chat WebSocket client connected, userId:', ws.userId);
     clients.add(ws);
 
-    // Update user status to online
-    if (ws.userId) {
-      try {
-        // Set both status and customStatus to online when connecting
-        await db
-          .update(users)
-          .set({ 
-            status: 'online',
-            customStatus: 'online'
-          })
-          .where(eq(users.id, ws.userId));
-
-        // Broadcast user status change
-        broadcast({
-          type: 'user_status',
-          payload: {
-            userId: ws.userId,
-            status: 'online'
-          }
-        });
-      } catch (error) {
-        console.error('Error updating user status:', error);
-      }
-    }
-
     ws.on('message', async (data: string) => {
       try {
         const message: WebSocketMessage = JSON.parse(data);
@@ -78,6 +75,7 @@ export function setupWebSocket(server: Server) {
           case 'user_status': {
             const { userId, status } = message.payload;
             try {
+              // Update both status fields
               await db
                 .update(users)
                 .set({ 
@@ -86,6 +84,7 @@ export function setupWebSocket(server: Server) {
                 })
                 .where(eq(users.id, userId));
 
+              // Broadcast to all connected clients immediately
               broadcast({
                 type: 'user_status',
                 payload: { userId, status }
@@ -267,7 +266,6 @@ export function setupWebSocket(server: Server) {
       console.log('WebSocket client disconnected, userId:', ws.userId);
       clients.delete(ws);
 
-      // Update user status to offline
       if (ws.userId) {
         try {
           await db
@@ -278,7 +276,6 @@ export function setupWebSocket(server: Server) {
             })
             .where(eq(users.id, ws.userId));
 
-          // Broadcast user status change
           broadcast({
             type: 'user_status',
             payload: {
@@ -294,6 +291,7 @@ export function setupWebSocket(server: Server) {
   });
 
   function broadcast(message: WebSocketMessage) {
+    console.log('Broadcasting message:', message);
     const deadClients: WebSocket[] = [];
 
     clients.forEach(client => {

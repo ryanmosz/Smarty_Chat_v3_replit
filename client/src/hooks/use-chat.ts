@@ -20,18 +20,18 @@ export function useChat() {
     queryKey: ['/api/channels'],
   });
 
-  // Users
+  // Users - reduced stale time to ensure fresh data
   const { data: users = [] } = useQuery<User[]>({
     queryKey: ['/api/users'],
-    staleTime: 1000, // Cache for 1 second only to ensure fresh data
+    staleTime: 0, // Always fetch fresh data
   });
 
-  // Active DM Users (users with whom we have conversations)
+  // Active DM Users with real-time status updates
   const { data: activeConversations = [] } = useQuery<DirectMessageWithUser[]>({
     queryKey: ['/api/active-conversations'],
+    staleTime: 0, // Always fetch fresh data
     select: (data) => {
       if (!data) return [];
-      // Filter out deleted messages and get unique users
       const activeMessages = data.filter(m => !m.isDeleted);
       const uniqueUsers = new Set<string>();
       return activeMessages.filter(msg => {
@@ -217,7 +217,7 @@ export function useChat() {
         case 'user_status': {
           const { userId, status } = message.payload;
 
-          // Immediately update the users cache
+          // Immediately update users cache
           queryClient.setQueryData<User[]>(['/api/users'], (oldUsers) => {
             if (!oldUsers) return oldUsers;
             return oldUsers.map(user =>
@@ -227,8 +227,11 @@ export function useChat() {
             );
           });
 
-          // Force refetch active conversations to update status indicators
-          queryClient.invalidateQueries({ queryKey: ['/api/active-conversations'] });
+          // Force immediate refetch of active conversations
+          queryClient.invalidateQueries({ 
+            queryKey: ['/api/active-conversations'],
+            refetchType: 'active'
+          });
         }
         break;
       }
