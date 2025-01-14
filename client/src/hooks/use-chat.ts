@@ -128,7 +128,7 @@ export function useChat() {
       await queryClient.cancelQueries({ queryKey });
 
       const optimisticMessage: DirectMessageWithUser = {
-        id: -Date.now(),
+        id: generateTempId(),
         content: newMessage.content,
         fromUserId: newMessage.fromUserId,
         toUserId: newMessage.toUserId,
@@ -214,7 +214,7 @@ export function useChat() {
           break;
         }
         case 'direct_message': {
-          const { fromUserId, toUserId } = message.payload;
+          const { toUserId } = message.payload;
           const dmQueryKey = [`/api/dm/${toUserId}`];
           const currentMessages = queryClient.getQueryData<DirectMessageWithUser[]>(dmQueryKey) || [];
 
@@ -224,6 +224,17 @@ export function useChat() {
               currentMessages.filter(m => m.id < 0).concat(message.payload)
             );
           }
+          break;
+        }
+        case 'direct_message_deleted': {
+          const { id: deletedMessageId, toUserId } = message.payload;
+          const dmQueryKey = [`/api/dm/${toUserId}`];
+          const messages = queryClient.getQueryData<DirectMessageWithUser[]>(dmQueryKey) || [];
+
+          queryClient.setQueryData<DirectMessageWithUser[]>(
+            dmQueryKey,
+            messages.filter(m => m.id !== deletedMessageId)
+          );
           break;
         }
       }

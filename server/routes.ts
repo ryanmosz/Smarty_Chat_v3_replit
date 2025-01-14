@@ -1,8 +1,8 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { db } from "@db";
-import { channels, messages, users } from "@db/schema";
-import { eq } from "drizzle-orm";
+import { channels, messages, users, directMessages } from "@db/schema";
+import { eq, or } from "drizzle-orm";
 import { setupWebSocket } from "./websocket";
 import multer from "multer";
 import path from "path";
@@ -164,6 +164,42 @@ export function registerRoutes(app: Express): Server {
       } else {
         res.status(500).json({ message: 'Failed to delete channel' });
       }
+    }
+  });
+
+  // Direct Message routes
+  app.get("/api/users", async (_req, res) => {
+    try {
+      const allUsers = await db.query.users.findMany();
+      res.json(allUsers);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      res.status(500).json({ message: 'Failed to fetch users' });
+    }
+  });
+
+  app.get("/api/dm/:userId", async (req, res) => {
+    try {
+      const userId = parseInt(req.params.userId);
+      if (isNaN(userId)) {
+        return res.status(400).json({ message: 'Invalid user ID' });
+      }
+
+      const userMessages = await db.query.directMessages.findMany({
+        where: (messages) => or(
+          eq(messages.fromUserId, userId),
+          eq(messages.toUserId, userId)
+        ),
+        with: {
+          fromUser: true,
+          toUser: true
+        }
+      });
+
+      res.json(userMessages);
+    } catch (error) {
+      console.error('Error fetching direct messages:', error);
+      res.status(500).json({ message: 'Failed to fetch direct messages' });
     }
   });
 

@@ -32,6 +32,7 @@ export function DirectMessageList({
   const { toast } = useToast();
   const { user: currentUser } = useUser();
 
+  // Filter users excluding current user and matching search query
   const filteredUsers = users
     .filter(u => u.id !== currentUser?.id)
     .filter(u => 
@@ -48,9 +49,18 @@ export function DirectMessageList({
       return;
     }
 
-    setIsOpen(false);
-    setSearchQuery("");
-    onUserSelect(userId);
+    try {
+      setIsOpen(false);
+      setSearchQuery("");
+      onUserSelect(userId);
+    } catch (error) {
+      console.error('Error starting DM:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to start direct message",
+      });
+    }
   };
 
   return (
@@ -87,20 +97,27 @@ export function DirectMessageList({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full"
+                autoFocus
               />
               <ScrollArea className="max-h-[200px]">
                 <div className="space-y-2">
-                  {filteredUsers.map((user) => (
-                    <Button
-                      key={user.id}
-                      variant="ghost"
-                      className="w-full justify-start"
-                      onClick={() => handleStartDM(user.id)}
-                    >
-                      <UserIcon className="h-4 w-4 mr-2" />
-                      {user.username}
-                    </Button>
-                  ))}
+                  {filteredUsers.length > 0 ? (
+                    filteredUsers.map((user) => (
+                      <Button
+                        key={user.id}
+                        variant="ghost"
+                        className="w-full justify-start"
+                        onClick={() => handleStartDM(user.id)}
+                      >
+                        <UserIcon className="h-4 w-4 mr-2" />
+                        {user.username}
+                      </Button>
+                    ))
+                  ) : (
+                    <div className="text-sm text-muted-foreground p-2">
+                      No users found
+                    </div>
+                  )}
                 </div>
               </ScrollArea>
             </div>
