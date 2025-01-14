@@ -32,12 +32,14 @@ interface ChannelListProps {
   channels: Channel[];
   selectedChannelId?: number;
   onChannelSelect: (channelId: number) => void;
+  onShowChannelsChange?: (showChannels: boolean) => void;
 }
 
 export function ChannelList({
   channels,
   selectedChannelId,
   onChannelSelect,
+  onShowChannelsChange,
 }: ChannelListProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [showChannels, setShowChannels] = useState(true);
@@ -45,6 +47,12 @@ export function ChannelList({
   const [description, setDescription] = useState("");
   const { toast } = useToast();
   const { user } = useUser();
+
+  const handleShowChannelsToggle = () => {
+    const newShowChannels = !showChannels;
+    setShowChannels(newShowChannels);
+    onShowChannelsChange?.(newShowChannels);
+  };
 
   const handleCreateChannel = async () => {
     if (!name.trim()) {
@@ -102,7 +110,6 @@ export function ChannelList({
         onChannelSelect(0);
       }
 
-      // Broadcast the channel deletion via WebSocket
       chatWs.send({
         type: 'channel_deleted',
         payload: { id: channelId }
@@ -123,13 +130,13 @@ export function ChannelList({
   };
 
   return (
-    <div className="flex flex-col h-full border-r bg-background">
+    <div className="flex flex-col">
       <div className="p-4 flex items-center justify-between border-b">
         <div className="flex items-center gap-2">
           <Button 
             variant="ghost" 
             size="sm"
-            onClick={() => setShowChannels(!showChannels)}
+            onClick={handleShowChannelsToggle}
             className="p-0 h-5 w-5"
           >
             {showChannels ? (
@@ -186,7 +193,7 @@ export function ChannelList({
           </DialogContent>
         </Dialog>
       </div>
-      <div className={`flex-1 overflow-hidden transition-all duration-200 ${showChannels ? 'max-h-[calc(100vh-5rem)]' : 'max-h-0'}`}>
+      <div className={`overflow-hidden transition-all duration-200 ${showChannels ? 'max-h-[500px]' : 'max-h-0'}`}>
         <ScrollArea className="h-full">
           <div className="space-y-1 p-2">
             {channels.map((channel) => (

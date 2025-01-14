@@ -11,6 +11,7 @@ export default function ChatPage() {
   const [selectedChannelId, setSelectedChannelId] = useState<number>();
   const [selectedUserId, setSelectedUserId] = useState<number>();
   const [threadMessage, setThreadMessage] = useState<Message>();
+  const [showChannels, setShowChannels] = useState(true);
   const { 
     channels = [], 
     users = [], 
@@ -53,17 +54,20 @@ export default function ChatPage() {
     <div className="h-screen flex">
       {/* Unified Sidebar */}
       <aside className="w-60 flex flex-col bg-background">
-        <div className="flex-grow overflow-y-auto">
+        <div className="relative flex flex-col">
           <ChannelList
             channels={channels}
             selectedChannelId={selectedChannelId}
             onChannelSelect={setSelectedChannelId}
+            onShowChannelsChange={setShowChannels}
           />
-          <DirectMessageList
-            users={users}
-            selectedUserId={selectedUserId}
-            onUserSelect={setSelectedUserId}
-          />
+          <div className={`transition-all duration-200 ${showChannels ? 'mt-0' : '-mt-2'}`}>
+            <DirectMessageList
+              users={users}
+              selectedUserId={selectedUserId}
+              onUserSelect={setSelectedUserId}
+            />
+          </div>
         </div>
       </aside>
 
