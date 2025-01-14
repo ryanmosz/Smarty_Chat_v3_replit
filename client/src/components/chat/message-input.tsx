@@ -48,6 +48,7 @@ export function MessageInput({ channelId, threadParentId }: MessageInputProps) {
         content,
         channelId,
         threadParentId,
+        userId: user?.id
       });
       setContent("");
     } catch (error) {
@@ -87,12 +88,13 @@ export function MessageInput({ channelId, threadParentId }: MessageInputProps) {
       }
 
       const { url } = await response.json();
-      const fileMessage = `File shared: [${file.name}](${url})`;
+      const fileMessage = `[${file.name}](${url})`;
 
       await sendMessage.mutateAsync({
         content: fileMessage,
         channelId,
         threadParentId,
+        userId: user?.id
       });
 
       toast({

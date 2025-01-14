@@ -26,6 +26,38 @@ export function MessageList({ messages, onThreadClick }: MessageListProps) {
     await deleteMessage.mutateAsync(messageId);
   };
 
+  const renderContent = (content: string) => {
+    // Match markdown-style links: [text](url)
+    const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+    const parts = content.split(linkRegex);
+
+    if (parts.length === 1) {
+      return content;
+    }
+
+    return parts.map((part, i) => {
+      if (i % 3 === 1) {
+        // This is the link text
+        const url = parts[i + 1];
+        return (
+          <a
+            key={i}
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-500 hover:underline"
+          >
+            {part}
+          </a>
+        );
+      } else if (i % 3 === 2) {
+        // This is the URL, skip it
+        return null;
+      }
+      return part;
+    });
+  };
+
   return (
     <ScrollArea className="flex-1 p-4">
       <div className="space-y-4">
@@ -59,7 +91,7 @@ export function MessageList({ messages, onThreadClick }: MessageListProps) {
                     {message.createdAt && format(new Date(message.createdAt), 'MMM d, h:mm a')}
                   </span>
                 </div>
-                <div className="mt-1">{message.content}</div>
+                <div className="mt-1">{renderContent(message.content)}</div>
                 <div className="mt-2 flex items-center gap-2">
                   {onThreadClick && (
                     <Button
@@ -72,7 +104,7 @@ export function MessageList({ messages, onThreadClick }: MessageListProps) {
                       Thread
                     </Button>
                   )}
-                  {/* Only show delete button if user authored the message */}
+                  {/* Show delete button if user authored the message */}
                   {user?.id === message.userId && (
                     <Button
                       variant="ghost"

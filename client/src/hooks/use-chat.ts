@@ -41,7 +41,7 @@ export function useChat() {
 
   // Send Message
   const sendMessage = useMutation({
-    mutationFn: (message: { content: string; channelId: number; threadParentId?: number }) => {
+    mutationFn: (message: { content: string; channelId: number; threadParentId?: number; userId?: number }) => {
       chatWs.send({
         type: 'message',
         payload: message
@@ -68,7 +68,7 @@ export function useChat() {
         content: newMessage.content,
         channelId: newMessage.channelId,
         threadParentId: newMessage.threadParentId || null,
-        userId: null, // Will be set by the server
+        userId: newMessage.userId || null,
         createdAt: new Date(),
         updatedAt: new Date(),
         isDeleted: false,
