@@ -186,19 +186,35 @@ export function registerRoutes(app: Express): Server {
   app.get("/api/dm/:userId", async (req, res) => {
     try {
       const userId = parseInt(req.params.userId);
+      const currentUserId = req.user?.id;
+
+      if (!currentUserId) {
+        return res.status(401).json({ message: 'Authentication required' });
+      }
+
       if (isNaN(userId)) {
         return res.status(400).json({ message: 'Invalid user ID' });
       }
 
+      // Only fetch messages where both the current user and requested user are participants
       const userMessages = await db.query.directMessages.findMany({
-        where: (messages) => or(
-          eq(messages.fromUserId, userId),
-          eq(messages.toUserId, userId)
+        where: and(
+          or(
+            and(
+              eq(directMessages.fromUserId, currentUserId),
+              eq(directMessages.toUserId, userId)
+            ),
+            and(
+              eq(directMessages.fromUserId, userId),
+              eq(directMessages.toUserId, currentUserId)
+            )
+          )
         ),
         with: {
           fromUser: true,
           toUser: true
-        }
+        },
+        orderBy: desc(directMessages.createdAt)
       });
 
       res.json(userMessages);
@@ -257,6 +273,7 @@ export function registerRoutes(app: Express): Server {
       res.status(500).json({ message: 'Failed to fetch active conversations' });
     }
   });
+
 
 
   app.get("/api/search", async (req, res) => {
