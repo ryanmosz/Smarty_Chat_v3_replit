@@ -12,22 +12,18 @@ type WebSocketMessage = {
 
 export function setupWebSocket(server: Server) {
   const wss = new WebSocketServer({ 
-    noServer: true // Important: Use noServer to handle upgrade manually
+    noServer: true 
   });
 
-  // Keep track of connected clients
   const clients = new Set<WebSocket>();
 
-  // Handle upgrade manually to properly differentiate between Vite HMR and chat WebSocket
   server.on('upgrade', (request, socket, head) => {
     const { pathname, query } = parseUrl(request.url || '', true);
 
-    // Allow Vite HMR WebSocket connections to pass through
     if (request.headers['sec-websocket-protocol'] === 'vite-hmr' || query.type === 'vite-hmr') {
       return;
     }
 
-    // Handle chat WebSocket connections
     if (query.type === 'chat') {
       wss.handleUpgrade(request, socket, head, (ws) => {
         wss.emit('connection', ws, request);
@@ -48,7 +44,6 @@ export function setupWebSocket(server: Server) {
           case 'message': {
             const { content, channelId, threadParentId, userId } = message.payload;
 
-            // First insert the new message
             const [newMessage] = await db
               .insert(messages)
               .values({ 
@@ -59,7 +54,6 @@ export function setupWebSocket(server: Server) {
               })
               .returning();
 
-            // Then fetch the complete message with user data
             const [messageWithUser] = await db.query.messages.findMany({
               where: eq(messages.id, newMessage.id),
               with: {
@@ -75,15 +69,18 @@ export function setupWebSocket(server: Server) {
           case 'message_deleted': {
             const { id } = message.payload;
             try {
-              // Delete the message from the database
               const [deletedMessage] = await db
                 .delete(messages)
                 .where(eq(messages.id, id))
                 .returning();
 
               if (deletedMessage) {
-                // Only broadcast if deletion was successful
                 broadcast({ type: 'message_deleted', payload: { id } });
+              } else {
+                ws.send(JSON.stringify({ 
+                  type: 'error', 
+                  payload: 'Message not found' 
+                }));
               }
             } catch (error) {
               console.error('Error deleting message:', error);
@@ -138,7 +135,6 @@ export function setupWebSocket(server: Server) {
       }
     });
 
-    // Clean up dead clients
     deadClients.forEach(client => {
       clients.delete(client);
     });

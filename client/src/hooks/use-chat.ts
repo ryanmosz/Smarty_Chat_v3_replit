@@ -129,18 +129,23 @@ export function useChat() {
   // Delete Message
   const deleteMessage = useMutation({
     mutationFn: (messageId: number) => {
-      chatWs.send({
-        type: 'message_deleted',
-        payload: { id: messageId }
+      return new Promise((resolve, reject) => {
+        try {
+          chatWs.send({
+            type: 'message_deleted',
+            payload: { id: messageId }
+          });
+          resolve(messageId);
+        } catch (error) {
+          reject(error);
+        }
       });
-      return Promise.resolve();
     },
     onMutate: async (messageId) => {
-      // Get all possible query keys that might contain this message
+      // Cancel any outgoing refetches
       const channelQueryKeys = channels?.map(c => [`/api/channels/${c.id}/messages`]) || [];
       const threadQueryKey = [`/api/messages/${messageId}/thread`];
 
-      // Cancel any outgoing refetches
       await Promise.all([
         ...channelQueryKeys.map(key => queryClient.cancelQueries({ queryKey: key })),
         queryClient.cancelQueries({ queryKey: threadQueryKey })
