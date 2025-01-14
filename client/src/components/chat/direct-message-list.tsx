@@ -43,6 +43,7 @@ export function DirectMessageList({
   const [isOpen, setIsOpen] = useState(false);
   const [showDMs, setShowDMs] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [localStatus, setLocalStatus] = useState<string>("online");
   const { toast } = useToast();
   const { user: currentUser } = useUser();
   const { activeConversations } = useChat();
@@ -65,13 +66,8 @@ export function DirectMessageList({
   const handleStatusChange = async (newStatus: string) => {
     if (!currentUser) return;
 
-    // Update local state first for immediate feedback
-    const updatedUser = { ...currentUser, customStatus: newStatus, status: newStatus };
-    // Find and update the current user in the users array
-    const userIndex = users.findIndex(u => u.id === currentUser.id);
-    if (userIndex !== -1) {
-      users[userIndex] = updatedUser;
-    }
+    // Update local status immediately for UI feedback
+    setLocalStatus(newStatus);
 
     // Send WebSocket message
     chatWs.send({
@@ -125,7 +121,8 @@ export function DirectMessageList({
     }
   };
 
-  const currentStatus = currentUser?.customStatus || 'online';
+  // Use local status for immediate feedback, fallback to server state
+  const displayStatus = currentUser?.id ? (localStatus || currentUser?.customStatus || 'online') : 'online';
 
   return (
     <div className="flex flex-col">
@@ -150,8 +147,8 @@ export function DirectMessageList({
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="sm" className="h-8">
                 <div className="flex items-center gap-2">
-                  {statusIcons[currentStatus as keyof typeof statusIcons]}
-                  <span className="text-xs capitalize">{currentStatus}</span>
+                  {statusIcons[displayStatus as keyof typeof statusIcons]}
+                  <span className="text-xs capitalize">{displayStatus}</span>
                 </div>
               </Button>
             </DropdownMenuTrigger>
