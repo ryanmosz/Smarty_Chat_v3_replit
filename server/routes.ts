@@ -242,9 +242,11 @@ export function registerRoutes(app: Express): Server {
         return res.json({ channels: [], messages: [], directMessages: [] });
       }
 
-      const likeQuery = `%${query}%`;
+      // Split query into words and create LIKE patterns
+      const searchWords = query.trim().toLowerCase().split(/\s+/);
+      const likePatterns = searchWords.map(word => `%${word}%`);
 
-      // Search channels - simple search
+      // Search channels
       const foundChannels = await db
         .select({
           id: channels.id,
@@ -252,11 +254,12 @@ export function registerRoutes(app: Express): Server {
           description: channels.description
         })
         .from(channels)
-        .where(ilike(channels.name, likeQuery))
+        .where(sql`(${channels.name} ILIKE ANY (ARRAY[${sql.join(likePatterns)}]) OR 
+                     ${channels.description} ILIKE ANY (ARRAY[${sql.join(likePatterns)}]))`)
         .orderBy(channels.name)
         .limit(5);
 
-      // Search messages - simplified search
+      // Search messages
       const foundMessages = await db
         .select({
           id: messages.id,
@@ -266,7 +269,7 @@ export function registerRoutes(app: Express): Server {
           userId: messages.userId
         })
         .from(messages)
-        .where(ilike(messages.content, likeQuery))
+        .where(sql`${messages.content} ILIKE ANY (ARRAY[${sql.join(likePatterns)}])`)
         .orderBy(sql`${messages.createdAt} DESC`)
         .limit(5);
 
@@ -284,7 +287,7 @@ export function registerRoutes(app: Express): Server {
         user: messageUsers.find(u => u.id === message.userId)
       }));
 
-      // Search direct messages - simplified search
+      // Search direct messages
       const foundDirectMessages = await db
         .select({
           id: directMessages.id,
@@ -294,7 +297,7 @@ export function registerRoutes(app: Express): Server {
           toUserId: directMessages.toUserId
         })
         .from(directMessages)
-        .where(ilike(directMessages.content, likeQuery))
+        .where(sql`${directMessages.content} ILIKE ANY (ARRAY[${sql.join(likePatterns)}])`)
         .orderBy(sql`${directMessages.createdAt} DESC`)
         .limit(5);
 
