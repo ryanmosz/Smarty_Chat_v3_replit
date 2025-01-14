@@ -164,7 +164,7 @@ export function ChannelList({
           </DialogContent>
         </Dialog>
       </div>
-      <div className={`flex-1 overflow-hidden transition-all duration-200 ${showChannels ? 'h-auto' : 'h-0'}`}>
+      <div className={`flex-1 overflow-hidden transition-all duration-200 ${showChannels ? 'max-h-[calc(100vh-5rem)]' : 'max-h-0'}`}>
         <ScrollArea className="h-full">
           <div className="space-y-1 p-2">
             {channels.map((channel) => (
