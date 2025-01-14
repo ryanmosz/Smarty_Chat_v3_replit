@@ -215,9 +215,9 @@ export function registerRoutes(app: Express): Server {
       });
 
       // Get unique conversations (latest message for each user pair)
-      const conversationMap = new Map<string, any>(); // Type any is a placeholder,  replace with correct type if known.
+      const conversationMap = new Map<string, any>(); 
       allDirectMessages.forEach(dm => {
-        if (dm.fromUserId && dm.toUserId) { // Add null check for fromUserId and toUserId
+        if (dm.fromUserId && dm.toUserId) { 
           const key = `${Math.min(dm.fromUserId, dm.toUserId)}-${Math.max(dm.fromUserId, dm.toUserId)}`;
           if (!conversationMap.has(key) && !dm.isDeleted) {
             conversationMap.set(key, dm);
@@ -244,43 +244,36 @@ export function registerRoutes(app: Express): Server {
 
       const likeQuery = `%${query}%`;
 
-      // Search channels - simple name search
-      const channels = await db
+      // Search channels
+      const foundChannels = await db
         .select()
         .from(channels)
         .where(ilike(channels.name, likeQuery))
         .limit(5);
 
-      // Search messages - basic content search
-      const messages = await db
-        .select({
-          id: messages.id,
-          content: messages.content,
-          channelId: messages.channelId,
-          createdAt: messages.createdAt,
-          userId: messages.userId
-        })
-        .from(messages)
-        .where(ilike(messages.content, likeQuery))
-        .limit(5);
+      // Search messages with user data
+      const foundMessages = await db.query.messages.findMany({
+        where: ilike(messages.content, likeQuery),
+        with: {
+          user: true
+        },
+        limit: 5
+      });
 
-      // Search direct messages - basic content search
-      const directMessages = await db
-        .select({
-          id: directMessages.id,
-          content: directMessages.content,
-          fromUserId: directMessages.fromUserId,
-          toUserId: directMessages.toUserId,
-          createdAt: directMessages.createdAt
-        })
-        .from(directMessages)
-        .where(ilike(directMessages.content, likeQuery))
-        .limit(5);
+      // Search direct messages with user data
+      const foundDirectMessages = await db.query.directMessages.findMany({
+        where: ilike(directMessages.content, likeQuery),
+        with: {
+          fromUser: true,
+          toUser: true
+        },
+        limit: 5
+      });
 
       res.json({
-        channels: channels || [],
-        messages: messages || [],
-        directMessages: directMessages || []
+        channels: foundChannels || [],
+        messages: foundMessages || [],
+        directMessages: foundDirectMessages || []
       });
     } catch (error) {
       console.error('Error searching:', error);
