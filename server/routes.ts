@@ -136,6 +136,7 @@ export function registerRoutes(app: Express): Server {
           .where(eq(reactions.id, existingReaction.id))
           .returning();
 
+        const wss = app.get('wss');
         wss.broadcast({
           type: 'reaction_deleted',
           payload: { messageId, emoji, userId }
@@ -157,6 +158,7 @@ export function registerRoutes(app: Express): Server {
       });
 
       // Broadcast reaction to all connected clients
+      const wss = app.get('wss');
       wss.broadcast({
         type: 'reaction',
         payload: reactionWithUser

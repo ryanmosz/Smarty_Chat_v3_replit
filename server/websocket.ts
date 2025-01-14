@@ -70,74 +70,22 @@ export function setupWebSocket(server: Server) {
         console.log(`Received WebSocket message:`, message);
 
         switch (message.type) {
-          case 'user_status': {
-            const { userId, status } = message.payload;
-            try {
-              await db
-                .update(users)
-                .set({ 
-                  status: status,
-                  customStatus: status 
-                })
-                .where(eq(users.id, userId));
-
-              broadcast({
-                type: 'user_status',
-                payload: { userId, status }
-              });
-            } catch (error) {
-              console.error('Error updating user status:', error);
-              ws.send(JSON.stringify({ 
-                type: 'error', 
-                payload: 'Failed to update status' 
-              }));
-            }
-            break;
-          }
-          case 'message': {
-            const { content, channelId, threadParentId, userId } = message.payload;
-
-            try {
-              const [newMessage] = await db
-                .insert(messages)
-                .values({ 
-                  content, 
-                  channelId, 
-                  threadParentId,
-                  userId 
-                })
-                .returning();
-
-              const [messageWithUser] = await db.query.messages.findMany({
-                where: eq(messages.id, newMessage.id),
-                with: {
-                  user: true,
-                  reactions: {
-                    with: {
-                      user: true
-                    }
-                  }
-                },
-                limit: 1
-              });
-
-              broadcast({ type: 'message', payload: messageWithUser });
-            } catch (error) {
-              console.error('Error creating message:', error);
-              ws.send(JSON.stringify({ 
-                type: 'error', 
-                payload: 'Failed to create message' 
-              }));
-            }
-            break;
-          }
           case 'reaction': {
             const { messageId, emoji, userId } = message.payload;
 
             try {
-              // Get message context first
+              // Check if reaction already exists
+              const existingReaction = await db.query.reactions.findFirst({
+                where: sql`${reactions.messageId} = ${messageId} AND ${reactions.userId} = ${userId} AND ${reactions.emoji} = ${emoji}`
+              });
+
+              // Get message context first to include in broadcast
               const [targetMessage] = await db.query.messages.findMany({
                 where: eq(messages.id, messageId),
+                with: {
+                  user: true,
+                  channel: true
+                },
                 limit: 1
               });
 
@@ -149,16 +97,10 @@ export function setupWebSocket(server: Server) {
                 return;
               }
 
-              // Check if reaction already exists
-              const existingReaction = await db.query.reactions.findFirst({
-                where: sql`${reactions.messageId} = ${messageId} AND ${reactions.userId} = ${userId} AND ${reactions.emoji} = ${emoji}`
-              });
-
               if (existingReaction) {
                 // Remove reaction if it exists
                 await db.delete(reactions)
-                  .where(eq(reactions.id, existingReaction.id))
-                  .returning();
+                  .where(eq(reactions.id, existingReaction.id));
 
                 broadcast({
                   type: 'reaction_deleted',
@@ -177,22 +119,23 @@ export function setupWebSocket(server: Server) {
                   .values({ messageId, emoji, userId })
                   .returning();
 
-                const [reactionWithUser] = await db.query.reactions.findMany({
+                const reactionWithUser = await db.query.reactions.findFirst({
                   where: eq(reactions.id, newReaction.id),
                   with: {
                     user: true
-                  },
-                  limit: 1
-                });
-
-                broadcast({ 
-                  type: 'reaction', 
-                  payload: {
-                    ...reactionWithUser,
-                    channelId: targetMessage.channelId,
-                    threadParentId: targetMessage.threadParentId
                   }
                 });
+
+                if (reactionWithUser) {
+                  broadcast({ 
+                    type: 'reaction', 
+                    payload: {
+                      ...reactionWithUser,
+                      channelId: targetMessage.channelId,
+                      threadParentId: targetMessage.threadParentId
+                    }
+                  });
+                }
               }
             } catch (error) {
               console.error('Error handling reaction:', error);
@@ -203,118 +146,14 @@ export function setupWebSocket(server: Server) {
             }
             break;
           }
-          case 'reaction_deleted':
-            //This case is handled implicitly within the 'reaction' case above
-            break;
-          case 'message_deleted': {
-            const { id } = message.payload;
-            try {
-              const [existingMessage] = await db.query.messages.findMany({
-                where: eq(messages.id, id),
-                limit: 1
-              });
-
-              if (!existingMessage) {
-                ws.send(JSON.stringify({ 
-                  type: 'error', 
-                  payload: 'Message not found' 
-                }));
-                return;
-              }
-
-              const [deletedMessage] = await db
-                .delete(messages)
-                .where(eq(messages.id, id))
-                .returning();
-
-              broadcast({ 
-                type: 'message_deleted', 
-                payload: { id, channelId: deletedMessage.channelId } 
-              });
-            } catch (error) {
-              console.error('Error deleting message:', error);
-              ws.send(JSON.stringify({ 
-                type: 'error', 
-                payload: 'Failed to delete message' 
-              }));
-            }
-            break;
-          }
-
-          case 'direct_message': {
-            const { content, fromUserId, toUserId } = message.payload;
-
-            try {
-              const [newDM] = await db
-                .insert(directMessages)
-                .values({ 
-                  content, 
-                  fromUserId, 
-                  toUserId,
-                })
-                .returning();
-
-              const [dmWithUsers] = await db.query.directMessages.findMany({
-                where: eq(directMessages.id, newDM.id),
-                with: {
-                  fromUser: true,
-                  toUser: true
-                },
-                limit: 1
-              });
-
-              broadcast({ type: 'direct_message', payload: dmWithUsers });
-            } catch (error) {
-              console.error('Error creating direct message:', error);
-              ws.send(JSON.stringify({ 
-                type: 'error', 
-                payload: 'Failed to create direct message' 
-              }));
-            }
-            break;
-          }
-
-          case 'direct_message_deleted': {
-            const { id } = message.payload;
-            try {
-              const [existingDM] = await db.query.directMessages.findMany({
-                where: eq(directMessages.id, id),
-                limit: 1
-              });
-
-              if (!existingDM) {
-                ws.send(JSON.stringify({ 
-                  type: 'error', 
-                  payload: 'Direct message not found' 
-                }));
-                return;
-              }
-
-              const [deletedDM] = await db
-                .delete(directMessages)
-                .where(eq(directMessages.id, id))
-                .returning();
-
-              broadcast({ 
-                type: 'direct_message_deleted', 
-                payload: { 
-                  id, 
-                  fromUserId: deletedDM.fromUserId,
-                  toUserId: deletedDM.toUserId 
-                } 
-              });
-            } catch (error) {
-              console.error('Error deleting direct message:', error);
-              ws.send(JSON.stringify({ 
-                type: 'error', 
-                payload: 'Failed to delete direct message' 
-              }));
-            }
-            break;
-          }
+          case 'message':
           case 'typing':
+          case 'direct_message':
+          case 'user_status':
           case 'channel_created':
           case 'channel_deleted':
+          case 'message_deleted':
+          case 'direct_message_deleted':
             broadcast(message);
             break;
           default:

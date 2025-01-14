@@ -14,8 +14,8 @@ import {
 } from "@/components/ui/popover";
 
 interface MessageWithUser extends Message {
-  user?: User;
-  reactions?: (Reaction & { user?: User })[];
+  user?: User | null;
+  reactions?: (Reaction & { user?: User | null })[];
 }
 
 interface MessageListProps {
@@ -44,7 +44,7 @@ export function MessageList({ messages, onThreadClick, highlightedMessageId }: M
   }, [highlightedMessageId]);
 
   const handleReaction = (messageId: number, emoji: string) => {
-    if (!user) return;
+    if (!user?.id) return;
 
     chatWs.send({
       type: 'reaction',
@@ -54,7 +54,8 @@ export function MessageList({ messages, onThreadClick, highlightedMessageId }: M
     setShowEmojiPicker(null);
   };
 
-  const formatDate = (dateString: string | Date) => {
+  const formatDate = (dateString: string | Date | null) => {
+    if (!dateString) return '';
     try {
       return format(new Date(dateString), 'MMM d, h:mm a');
     } catch (error) {
@@ -75,10 +76,11 @@ export function MessageList({ messages, onThreadClick, highlightedMessageId }: M
           const isHighlighted = message.id === highlightedMessageId;
 
           // Group reactions by emoji
-          const reactionGroups = (message.reactions || []).reduce((acc, reaction) => {
+          const reactionGroups = message.reactions?.reduce((acc, reaction) => {
+            if (!reaction.emoji) return acc;
             acc[reaction.emoji] = (acc[reaction.emoji] || 0) + 1;
             return acc;
-          }, {} as Record<string, number>);
+          }, {} as Record<string, number>) || {};
 
           return (
             <div
@@ -108,7 +110,7 @@ export function MessageList({ messages, onThreadClick, highlightedMessageId }: M
                     {formatDate(message.createdAt)}
                   </span>
                 </div>
-                <div className="mt-1">{message.content}</div>
+                <div className="mt-1 break-words">{message.content}</div>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   {/* Display reaction groups */}
                   {Object.entries(reactionGroups).map(([emoji, count]) => (
@@ -124,7 +126,10 @@ export function MessageList({ messages, onThreadClick, highlightedMessageId }: M
                   ))}
 
                   {/* Quick reaction buttons */}
-                  <Popover open={showEmojiPicker === message.id} onOpenChange={(open) => setShowEmojiPicker(open ? message.id : null)}>
+                  <Popover 
+                    open={showEmojiPicker === message.id} 
+                    onOpenChange={(open) => setShowEmojiPicker(open ? message.id : null)}
+                  >
                     <PopoverTrigger asChild>
                       <Button
                         variant="ghost"
@@ -141,6 +146,7 @@ export function MessageList({ messages, onThreadClick, highlightedMessageId }: M
                             key={emoji}
                             variant="ghost"
                             size="sm"
+                            className="px-2"
                             onClick={() => handleReaction(message.id, emoji)}
                           >
                             {emoji}
