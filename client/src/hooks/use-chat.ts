@@ -216,13 +216,15 @@ export function useChat() {
         }
         case 'user_status': {
           const { userId, status } = message.payload;
-          // Update the user's status in the cache
+          // Update the user's status in the cache and trigger an immediate re-render
           queryClient.setQueryData<User[]>(['/api/users'], (oldUsers) => {
             if (!oldUsers) return oldUsers;
             return oldUsers.map(user =>
-              user.id === userId ? { ...user, status } : user
+              user.id === userId ? { ...user, customStatus: status } : user
             );
           });
+          // Also invalidate active conversations to update status in DM list
+          queryClient.invalidateQueries({ queryKey: ['/api/active-conversations'] });
           break;
         }
       }
