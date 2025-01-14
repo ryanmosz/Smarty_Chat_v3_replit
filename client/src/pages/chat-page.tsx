@@ -3,7 +3,6 @@ import { useChat } from "@/hooks/use-chat";
 import { ChannelList } from "@/components/chat/channel-list";
 import { MessageList } from "@/components/chat/message-list";
 import { MessageInput } from "@/components/chat/message-input";
-import { ThreadPanel } from "@/components/chat/thread-panel";
 import { ChatHeader } from "@/components/chat/chat-header";
 import type { Message } from "@db/schema";
 
@@ -67,14 +66,6 @@ export default function ChatPage() {
               </div>
             )}
           </div>
-
-          {/* Keep the thread panel for context */}
-          {threadMessage && (
-            <ThreadPanel
-              parentMessage={threadMessage}
-              onClose={() => setThreadMessage(undefined)}
-            />
-          )}
         </div>
       </div>
     </div>
