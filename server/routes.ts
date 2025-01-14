@@ -1,8 +1,8 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { db } from "@db";
-import { channels, messages, users, directMessages } from "@db/schema";
-import { eq, or, sql } from "drizzle-orm";
+import { channels, messages, users, directMessages, emojis, emojiCategories, reactions } from "@db/schema";
+import { eq, or, sql, and, desc } from "drizzle-orm";
 import { setupWebSocket } from "./websocket";
 import multer from "multer";
 import path from "path";
@@ -22,7 +22,12 @@ const upload = multer({
     fileSize: 5 * 1024 * 1024, // 5MB limit
   },
   fileFilter: (_req, file, cb) => {
-    // Accept all file types for now
+    // Accept images for emoji uploads
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+    if (file.fieldname === 'emoji' && !allowedTypes.includes(file.mimetype)) {
+      cb(null, false);
+      return;
+    }
     cb(null, true);
   },
 });
@@ -296,6 +301,173 @@ export function registerRoutes(app: Express): Server {
         messages: [],
         directMessages: []
       });
+    }
+  });
+
+  // New Emoji Category Routes
+  app.get("/api/emoji-categories", async (_req, res) => {
+    try {
+      const categories = await db.query.emojiCategories.findMany({
+        with: {
+          emojis: true,
+        },
+        orderBy: (categories) => [categories.displayOrder],
+      });
+      res.json(categories);
+    } catch (error) {
+      console.error('Error fetching emoji categories:', error);
+      res.status(500).json({ message: 'Failed to fetch emoji categories' });
+    }
+  });
+
+  app.post("/api/emoji-categories", async (req, res) => {
+    try {
+      const { name, description, displayOrder } = req.body;
+      const [category] = await db.insert(emojiCategories)
+        .values({ name, description, displayOrder })
+        .returning();
+      res.json(category);
+    } catch (error) {
+      console.error('Error creating emoji category:', error);
+      res.status(500).json({ message: 'Failed to create emoji category' });
+    }
+  });
+
+  // Emoji Routes
+  app.get("/api/emojis", async (req, res) => {
+    try {
+      const allEmojis = await db.query.emojis.findMany({
+        with: {
+          category: true,
+          createdBy: {
+            columns: {
+              id: true,
+              username: true,
+              avatarUrl: true,
+            },
+          },
+        },
+      });
+      res.json(allEmojis);
+    } catch (error) {
+      console.error('Error fetching emojis:', error);
+      res.status(500).json({ message: 'Failed to fetch emojis' });
+    }
+  });
+
+  app.post("/api/emojis", upload.single('emoji'), async (req, res) => {
+    try {
+      const { shortcode, unicode, categoryId } = req.body;
+      const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
+
+      if (!shortcode) {
+        return res.status(400).json({ message: 'Shortcode is required' });
+      }
+
+      const [emoji] = await db.insert(emojis)
+        .values({
+          shortcode,
+          unicode,
+          imageUrl,
+          categoryId: categoryId ? parseInt(categoryId) : null,
+          isCustom: !!imageUrl,
+          createdById: req.user?.id,
+        })
+        .returning();
+
+      res.json(emoji);
+    } catch (error) {
+      console.error('Error creating emoji:', error);
+      res.status(500).json({ message: 'Failed to create emoji' });
+    }
+  });
+
+  // Enhanced Reaction Routes
+  app.post("/api/messages/:messageId/reactions", async (req, res) => {
+    try {
+      const messageId = parseInt(req.params.messageId);
+      const { emojiId, emoji: legacyEmoji } = req.body;
+      const userId = req.user?.id;
+
+      if (!userId) {
+        return res.status(401).json({ message: 'Authentication required' });
+      }
+
+      // Check for existing reaction
+      const existingReaction = await db.query.reactions.findFirst({
+        where: and(
+          eq(reactions.messageId, messageId),
+          eq(reactions.userId, userId),
+          emojiId ? eq(reactions.emojiId, emojiId) : eq(reactions.emoji, legacyEmoji)
+        ),
+      });
+
+      if (existingReaction) {
+        return res.status(400).json({ message: 'Reaction already exists' });
+      }
+
+      // Create new reaction
+      const [reaction] = await db.insert(reactions)
+        .values({
+          messageId,
+          userId,
+          emojiId,
+          emoji: !emojiId ? legacyEmoji : null, // Support legacy emoji format
+        })
+        .returning();
+
+      // Broadcast reaction update
+      wss.broadcast({
+        type: 'reaction_added',
+        payload: {
+          ...reaction,
+          user: req.user,
+        },
+      });
+
+      res.json(reaction);
+    } catch (error) {
+      console.error('Error adding reaction:', error);
+      res.status(500).json({ message: 'Failed to add reaction' });
+    }
+  });
+
+  app.delete("/api/messages/:messageId/reactions/:reactionId", async (req, res) => {
+    try {
+      const messageId = parseInt(req.params.messageId);
+      const reactionId = parseInt(req.params.reactionId);
+      const userId = req.user?.id;
+
+      if (!userId) {
+        return res.status(401).json({ message: 'Authentication required' });
+      }
+
+      const [deletedReaction] = await db.delete(reactions)
+        .where(and(
+          eq(reactions.id, reactionId),
+          eq(reactions.messageId, messageId),
+          eq(reactions.userId, userId)
+        ))
+        .returning();
+
+      if (!deletedReaction) {
+        return res.status(404).json({ message: 'Reaction not found' });
+      }
+
+      // Broadcast reaction removal
+      wss.broadcast({
+        type: 'reaction_removed',
+        payload: {
+          messageId,
+          reactionId,
+          userId,
+        },
+      });
+
+      res.json({ message: 'Reaction removed successfully' });
+    } catch (error) {
+      console.error('Error removing reaction:', error);
+      res.status(500).json({ message: 'Failed to remove reaction' });
     }
   });
 
