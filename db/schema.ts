@@ -1,14 +1,7 @@
 import { pgTable, text, serial, integer, boolean, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
-import { relations } from "drizzle-orm";
+import { relations, type InferModel } from "drizzle-orm";
 import { z } from "zod";
-
-// Color tracking table
-export const colorAssignments = pgTable("color_assignments", {
-  id: serial("id").primaryKey(),
-  color: text("color").notNull(),
-  lastUsed: timestamp("last_used").defaultNow().notNull(),
-});
 
 // Users table
 export const users = pgTable("users", {
@@ -36,37 +29,16 @@ export const messages = pgTable("messages", {
   content: text("content").notNull(),
   userId: integer("user_id").references(() => users.id),
   channelId: integer("channel_id").references(() => channels.id),
-  threadParentId: integer("thread_parent_id"),
+  threadParentId: integer("thread_parent_id").references(() => messages.id),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   isDeleted: boolean("is_deleted").default(false),
 });
 
-// Direct Messages
-export const directMessages = pgTable("direct_messages", {
-  id: serial("id").primaryKey(),
-  fromUserId: integer("from_user_id").references(() => users.id),
-  toUserId: integer("to_user_id").references(() => users.id),
-  content: text("content").notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
-  isDeleted: boolean("is_deleted").default(false),
-});
-
-// Message Reactions
-export const reactions = pgTable("reactions", {
-  id: serial("id").primaryKey(),
-  messageId: integer("message_id").references(() => messages.id),
-  userId: integer("user_id").references(() => users.id),
-  emoji: text("emoji").notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
 // Relations
 export const userRelations = relations(users, ({ many }) => ({
   messages: many(messages),
-  sentDirectMessages: many(directMessages, { relationName: "fromUser" }),
-  receivedDirectMessages: many(directMessages, { relationName: "toUser" }),
-  reactions: many(reactions),
+  channels: many(channels, { relationName: "createdChannels" }),
 }));
 
 export const channelRelations = relations(channels, ({ one, many }) => ({
@@ -86,41 +58,15 @@ export const messageRelations = relations(messages, ({ one, many }) => ({
     fields: [messages.channelId],
     references: [channels.id],
   }),
-  thread: one(messages, {
+  threadParent: one(messages, {
     fields: [messages.threadParentId],
     references: [messages.id],
   }),
   replies: many(messages, { relationName: "thread" }),
-  reactions: many(reactions),
 }));
-
-export const directMessageRelations = relations(directMessages, ({ one }) => ({
-  fromUser: one(users, {
-    fields: [directMessages.fromUserId],
-    references: [users.id],
-  }),
-  toUser: one(users, {
-    fields: [directMessages.toUserId],
-    references: [users.id],
-  }),
-}));
-
-export const reactionRelations = relations(reactions, ({ one }) => ({
-  user: one(users, {
-    fields: [reactions.userId],
-    references: [users.id],
-  }),
-  message: one(messages, {
-    fields: [reactions.messageId],
-    references: [messages.id],
-  }),
-}));
-
-// Base schemas
-const baseUserSchema = createInsertSchema(users);
 
 // Enhanced schemas with additional validation
-export const insertUserSchema = baseUserSchema.extend({
+export const insertUserSchema = createInsertSchema(users).extend({
   username: z.string().min(1),
   password: z.string().min(1),
 });
@@ -132,12 +78,10 @@ export const insertMessageSchema = createInsertSchema(messages);
 export const selectMessageSchema = createSelectSchema(messages);
 
 // Type exports
-export type User = typeof users.$inferSelect;
-export type NewUser = typeof users.$inferInsert;
-export type Message = typeof messages.$inferSelect;
-export type Channel = typeof channels.$inferSelect;
-export type DirectMessage = typeof directMessages.$inferSelect;
-export type Reaction = typeof reactions.$inferSelect;
+export type User = InferModel<typeof users, "select">;
+export type NewUser = InferModel<typeof users, "insert">;
+export type Message = InferModel<typeof messages, "select">;
+export type Channel = InferModel<typeof channels, "select">;
 
 // Re-export the User type as SelectUser for auth compatibility
 export type SelectUser = User;

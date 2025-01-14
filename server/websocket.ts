@@ -12,22 +12,18 @@ type WebSocketMessage = {
 
 export function setupWebSocket(server: Server) {
   const wss = new WebSocketServer({ 
-    noServer: true // Important: Use noServer to handle upgrade manually
+    noServer: true
   });
 
-  // Keep track of connected clients
   const clients = new Set<WebSocket>();
 
-  // Handle upgrade manually to properly differentiate between Vite HMR and chat WebSocket
   server.on('upgrade', (request, socket, head) => {
     const { pathname, query } = parseUrl(request.url || '', true);
 
-    // Allow Vite HMR WebSocket connections to pass through
     if (request.headers['sec-websocket-protocol'] === 'vite-hmr' || query.type === 'vite-hmr') {
       return;
     }
 
-    // Handle chat WebSocket connections
     if (query.type === 'chat') {
       wss.handleUpgrade(request, socket, head, (ws) => {
         wss.emit('connection', ws, request);
@@ -45,34 +41,58 @@ export function setupWebSocket(server: Server) {
         console.log(`Received WebSocket message:`, message);
 
         switch (message.type) {
-          case 'message':
+          case 'message': {
             const { content, channelId, threadParentId, userId } = message.payload;
-            const [newMessage] = await db
-              .insert(messages)
-              .values({ content, channelId, threadParentId, userId })
-              .returning();
+
+            // Create the message
+            const result = await db.insert(messages).values({ 
+              content, 
+              channelId, 
+              threadParentId, 
+              userId,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+              isDeleted: false
+            });
+
+            const [newMessage] = result;
+
+            if (!newMessage) {
+              throw new Error('Failed to create message');
+            }
 
             // Fetch the complete message with user data
-            const [messageWithUser] = await db.query.messages.findMany({
+            const messageWithUser = await db.query.messages.findFirst({
               where: eq(messages.id, newMessage.id),
               with: {
-                user: true
-              },
-              limit: 1
+                user: {
+                  columns: {
+                    id: true,
+                    username: true,
+                    avatarColor: true
+                  }
+                }
+              }
             });
+
+            if (!messageWithUser) {
+              throw new Error('Failed to fetch created message');
+            }
 
             broadcast({ type: 'message', payload: messageWithUser });
             break;
+          }
 
-          case 'message_deleted':
+          case 'message_deleted': {
             const { id } = message.payload;
             await db
-              .delete(messages)
+              .update(messages)
+              .set({ isDeleted: true })
               .where(eq(messages.id, id));
 
-            // Broadcast deletion to all clients
             broadcast({ type: 'message_deleted', payload: { id } });
             break;
+          }
 
           case 'typing':
           case 'reaction':
@@ -85,7 +105,7 @@ export function setupWebSocket(server: Server) {
         console.error('WebSocket message processing error:', error);
         ws.send(JSON.stringify({ 
           type: 'error', 
-          payload: 'Failed to process message' 
+          payload: error instanceof Error ? error.message : 'Failed to process message'
         }));
       }
     });
@@ -117,7 +137,6 @@ export function setupWebSocket(server: Server) {
       }
     });
 
-    // Clean up dead clients
     deadClients.forEach(client => {
       clients.delete(client);
     });
