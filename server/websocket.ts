@@ -47,27 +47,23 @@ export function setupWebSocket(server: Server) {
     // Update user status to online
     if (ws.userId) {
       try {
-        const [user] = await db
-          .select()
-          .from(users)
-          .where(eq(users.id, ws.userId))
-          .limit(1);
+        // Set both status and customStatus to online when connecting
+        await db
+          .update(users)
+          .set({ 
+            status: 'online',
+            customStatus: 'online'
+          })
+          .where(eq(users.id, ws.userId));
 
-        if (user && user.customStatus !== 'offline') {
-          await db
-            .update(users)
-            .set({ status: 'online' })
-            .where(eq(users.id, ws.userId));
-
-          // Broadcast user status change
-          broadcast({
-            type: 'user_status',
-            payload: {
-              userId: ws.userId,
-              status: 'online'
-            }
-          });
-        }
+        // Broadcast user status change
+        broadcast({
+          type: 'user_status',
+          payload: {
+            userId: ws.userId,
+            status: 'online'
+          }
+        });
       } catch (error) {
         console.error('Error updating user status:', error);
       }
@@ -79,6 +75,30 @@ export function setupWebSocket(server: Server) {
         console.log(`Received WebSocket message:`, message);
 
         switch (message.type) {
+          case 'user_status': {
+            const { userId, status } = message.payload;
+            try {
+              await db
+                .update(users)
+                .set({ 
+                  status: status,
+                  customStatus: status 
+                })
+                .where(eq(users.id, userId));
+
+              broadcast({
+                type: 'user_status',
+                payload: { userId, status }
+              });
+            } catch (error) {
+              console.error('Error updating user status:', error);
+              ws.send(JSON.stringify({ 
+                type: 'error', 
+                payload: 'Failed to update status' 
+              }));
+            }
+            break;
+          }
           case 'message': {
             const { content, channelId, threadParentId, userId } = message.payload;
 
@@ -223,28 +243,6 @@ export function setupWebSocket(server: Server) {
           case 'channel_deleted':
             broadcast(message);
             break;
-
-          case 'user_status': {
-            const { userId, status } = message.payload;
-            try {
-              await db
-                .update(users)
-                .set({ customStatus: status })
-                .where(eq(users.id, userId));
-
-              broadcast({
-                type: 'user_status',
-                payload: { userId, status }
-              });
-            } catch (error) {
-              console.error('Error updating user status:', error);
-              ws.send(JSON.stringify({ 
-                type: 'error', 
-                payload: 'Failed to update status' 
-              }));
-            }
-            break;
-          }
           default:
             ws.send(JSON.stringify({ 
               type: 'error', 
@@ -274,7 +272,10 @@ export function setupWebSocket(server: Server) {
         try {
           await db
             .update(users)
-            .set({ status: 'offline' })
+            .set({ 
+              status: 'offline',
+              customStatus: 'offline' 
+            })
             .where(eq(users.id, ws.userId));
 
           // Broadcast user status change

@@ -23,7 +23,7 @@ export function useChat() {
   // Users
   const { data: users = [] } = useQuery<User[]>({
     queryKey: ['/api/users'],
-    staleTime: 30000, // Cache for 30 seconds
+    staleTime: 1000, // Cache for 1 second only to ensure fresh data
   });
 
   // Active DM Users (users with whom we have conversations)
@@ -216,17 +216,21 @@ export function useChat() {
         }
         case 'user_status': {
           const { userId, status } = message.payload;
-          // Update the user's status in the cache and trigger an immediate re-render
+
+          // Immediately update the users cache
           queryClient.setQueryData<User[]>(['/api/users'], (oldUsers) => {
             if (!oldUsers) return oldUsers;
             return oldUsers.map(user =>
-              user.id === userId ? { ...user, customStatus: status } : user
+              user.id === userId
+                ? { ...user, status, customStatus: status }
+                : user
             );
           });
-          // Also invalidate active conversations to update status in DM list
+
+          // Force refetch active conversations to update status indicators
           queryClient.invalidateQueries({ queryKey: ['/api/active-conversations'] });
-          break;
         }
+        break;
       }
     });
 
