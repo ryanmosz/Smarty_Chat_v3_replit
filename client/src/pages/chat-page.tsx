@@ -14,8 +14,6 @@ export default function ChatPage() {
   const { data: channelMessages = [] } = getChannelMessages(selectedChannelId || 0);
   const { data: threadMessages = [] } = getThreadMessages(threadMessage?.id || 0);
 
-  const displayMessages = threadMessage ? threadMessages : channelMessages;
-
   return (
     <div className="h-screen flex">
       {/* Channel List Sidebar - Full Height */}
@@ -36,8 +34,8 @@ export default function ChatPage() {
             {selectedChannelId ? (
               <>
                 <MessageList
-                  messages={displayMessages}
-                  onThreadClick={setThreadMessage}
+                  messages={threadMessage ? threadMessages : channelMessages}
+                  onThreadClick={threadMessage ? undefined : setThreadMessage}
                 />
                 <MessageInput 
                   channelId={selectedChannelId} 
