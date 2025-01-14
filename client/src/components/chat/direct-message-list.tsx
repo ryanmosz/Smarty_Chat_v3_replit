@@ -9,13 +9,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import type { User } from "@db/schema";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/hooks/use-user";
@@ -34,11 +28,17 @@ export function DirectMessageList({
 }: DirectMessageListProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [showDMs, setShowDMs] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
   const { toast } = useToast();
   const { user: currentUser } = useUser();
 
-  const handleStartDM = async (selectedUserId: string) => {
-    const userId = parseInt(selectedUserId);
+  const filteredUsers = users
+    .filter(u => u.id !== currentUser?.id)
+    .filter(u => 
+      u.username.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+  const handleStartDM = async (userId: number) => {
     if (isNaN(userId)) {
       toast({
         variant: "destructive",
@@ -49,6 +49,7 @@ export function DirectMessageList({
     }
 
     setIsOpen(false);
+    setSearchQuery("");
     onUserSelect(userId);
   };
 
@@ -80,20 +81,29 @@ export function DirectMessageList({
             <DialogHeader>
               <DialogTitle>Start Direct Message</DialogTitle>
             </DialogHeader>
-            <Select onValueChange={handleStartDM}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select a user" />
-              </SelectTrigger>
-              <SelectContent>
-                {users
-                  .filter(u => u.id !== currentUser?.id)
-                  .map((user) => (
-                    <SelectItem key={user.id} value={user.id.toString()}>
+            <div className="space-y-4">
+              <Input
+                placeholder="Search users..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full"
+              />
+              <ScrollArea className="max-h-[200px]">
+                <div className="space-y-2">
+                  {filteredUsers.map((user) => (
+                    <Button
+                      key={user.id}
+                      variant="ghost"
+                      className="w-full justify-start"
+                      onClick={() => handleStartDM(user.id)}
+                    >
+                      <UserIcon className="h-4 w-4 mr-2" />
                       {user.username}
-                    </SelectItem>
+                    </Button>
                   ))}
-              </SelectContent>
-            </Select>
+                </div>
+              </ScrollArea>
+            </div>
           </DialogContent>
         </Dialog>
       </div>
