@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useUser } from "@/hooks/use-user";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
@@ -63,7 +63,6 @@ export default function AuthPage() {
       <Card className="w-full max-w-md mx-4">
         <CardHeader className="text-center space-y-4">
           <Logo className="mx-auto" />
-          <CardTitle>Welcome to Smarty Chat</CardTitle>
         </CardHeader>
         <CardContent>
           <Tabs 
