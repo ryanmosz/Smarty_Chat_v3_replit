@@ -2,35 +2,22 @@ import { Input } from "@/components/ui/input";
 import { Search, Loader2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { User } from "@db/schema";
+import type { Message, Channel, DirectMessage, User } from "@db/schema";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { format } from "date-fns";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useLocation } from "wouter";
 
-interface MessageResult {
-  id: number;
-  content: string;
-  channelId: number;
-  userId: number;
-  createdAt: string;
-  user: User | null;
-}
-
-interface DirectMessageResult {
-  id: number;
-  content: string;
-  fromUserId: number;
-  toUserId: number;
-  createdAt: string;
-  fromUser: User | null;
-  toUser: User | null;
-}
-
 interface SearchResults {
-  channels: never[];
-  messages: MessageResult[];
-  directMessages: DirectMessageResult[];
+  channels: Channel[];
+  messages: (Message & { 
+    user: User | null;
+    channel: { id: number; name: string } | null;
+  })[];
+  directMessages: (DirectMessage & { 
+    fromUser: User | null;
+    toUser: User | null;
+  })[];
 }
 
 export function SearchBar() {
@@ -72,17 +59,31 @@ export function SearchBar() {
     retry: 1,
   });
 
-  const handleMessageClick = (channelId: number, messageId: number) => {
-    setLocation(`/channel/${channelId}?message=${messageId}`);
-    setShowResults(false);
-    setQuery("");
+  const handleMessageClick = (channelId: number | null, messageId: number) => {
+    if (channelId) {
+      setLocation(`/channel/${channelId}?message=${messageId}`);
+      setShowResults(false);
+      setQuery("");
+    }
   };
 
-  const handleDirectMessageClick = (fromUserId: number) => {
-    window.dispatchEvent(new CustomEvent('selectUser', { detail: fromUserId }));
-    setShowResults(false);
-    setQuery("");
-    setLocation('/');
+  const handleDirectMessageClick = (userId: number | null) => {
+    if (userId) {
+      window.dispatchEvent(new CustomEvent('selectUser', { detail: userId }));
+      setShowResults(false);
+      setQuery("");
+      setLocation('/');
+    }
+  };
+
+  const formatDate = (dateString: string | Date | null) => {
+    if (!dateString) return '';
+    try {
+      return format(new Date(dateString), 'MMM d, h:mm a');
+    } catch (error) {
+      console.error('Date formatting error:', error);
+      return '';
+    }
   };
 
   return (
@@ -128,8 +129,16 @@ export function SearchBar() {
                           onClick={() => handleMessageClick(message.channelId, message.id)}
                         >
                           <div className="flex items-start gap-2">
-                            <Avatar className="h-6 w-6">
-                              <AvatarFallback>
+                            <Avatar 
+                              className="h-6 w-6"
+                              style={{ backgroundColor: message.user?.avatarColor || 'hsl(0, 0%, 90%)' }}
+                            >
+                              <AvatarFallback
+                                style={{ 
+                                  backgroundColor: message.user?.avatarColor || 'hsl(0, 0%, 90%)',
+                                  color: 'black'
+                                }}
+                              >
                                 {message.user?.username?.slice(0, 2).toUpperCase() || "??"}
                               </AvatarFallback>
                             </Avatar>
@@ -139,7 +148,7 @@ export function SearchBar() {
                               </div>
                               <div className="text-sm">{message.content}</div>
                               <div className="text-xs text-muted-foreground">
-                                {format(new Date(message.createdAt), 'MMM d, h:mm a')}
+                                {formatDate(message.createdAt)} in #{message.channel?.name || "unknown-channel"}
                               </div>
                             </div>
                           </div>
@@ -160,8 +169,16 @@ export function SearchBar() {
                           onClick={() => handleDirectMessageClick(dm.fromUserId)}
                         >
                           <div className="flex items-start gap-2">
-                            <Avatar className="h-6 w-6">
-                              <AvatarFallback>
+                            <Avatar 
+                              className="h-6 w-6"
+                              style={{ backgroundColor: dm.fromUser?.avatarColor || 'hsl(0, 0%, 90%)' }}
+                            >
+                              <AvatarFallback
+                                style={{ 
+                                  backgroundColor: dm.fromUser?.avatarColor || 'hsl(0, 0%, 90%)',
+                                  color: 'black'
+                                }}
+                              >
                                 {dm.fromUser?.username?.slice(0, 2).toUpperCase() || "??"}
                               </AvatarFallback>
                             </Avatar>
@@ -172,7 +189,7 @@ export function SearchBar() {
                               </div>
                               <div className="text-sm">{dm.content}</div>
                               <div className="text-xs text-muted-foreground">
-                                {format(new Date(dm.createdAt), 'MMM d, h:mm a')}
+                                {formatDate(dm.createdAt)}
                               </div>
                             </div>
                           </div>

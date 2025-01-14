@@ -234,7 +234,6 @@ export function registerRoutes(app: Express): Server {
   });
 
 
-  // Search endpoint
   app.get("/api/search", async (req, res) => {
     try {
       const query = req.query.q as string;
@@ -242,66 +241,44 @@ export function registerRoutes(app: Express): Server {
         return res.json({ channels: [], messages: [], directMessages: [] });
       }
 
-      // Use both full-text search and LIKE for better results
-      const foundMessages = await db
-        .select({
-          id: messages.id,
-          content: messages.content,
-          channelId: messages.channelId,
-          userId: messages.userId,
-          createdAt: messages.createdAt,
-        })
-        .from(messages)
-        .where(sql`
-          to_tsvector('english', content) @@ plainto_tsquery('english', ${query})
-          OR LOWER(content) LIKE ${`%${query.toLowerCase()}%`}
-        `);
+      const searchPattern = `%${query.toLowerCase()}%`;
+
+      // Search messages with proper SQL pattern matching
+      const foundMessages = await db.query.messages.findMany({
+        where: sql`LOWER(${messages.content}) LIKE ${searchPattern} AND ${messages.isDeleted} = false`,
+        with: {
+          user: true,
+          channel: {
+            columns: {
+              id: true,
+              name: true
+            }
+          }
+        },
+        orderBy: (messages, { desc }) => [desc(messages.createdAt)]
+      });
 
       // Search direct messages
-      const foundDirectMessages = await db
-        .select({
-          id: directMessages.id,
-          content: directMessages.content,
-          fromUserId: directMessages.fromUserId,
-          toUserId: directMessages.toUserId,
-          createdAt: directMessages.createdAt,
-        })
-        .from(directMessages)
-        .where(sql`
-          to_tsvector('english', content) @@ plainto_tsquery('english', ${query})
-          OR LOWER(content) LIKE ${`%${query.toLowerCase()}%`}
-        `);
+      const foundDirectMessages = await db.query.directMessages.findMany({
+        where: sql`LOWER(${directMessages.content}) LIKE ${searchPattern} AND ${directMessages.isDeleted} = false`,
+        with: {
+          fromUser: true,
+          toUser: true
+        },
+        orderBy: (messages, { desc }) => [desc(messages.createdAt)]
+      });
 
-      // Get users for messages and direct messages
-      const userIds = [
-        ...foundMessages.map(m => m.userId),
-        ...foundDirectMessages.map(dm => dm.fromUserId),
-        ...foundDirectMessages.map(dm => dm.toUserId),
-      ].filter(Boolean);
-
-      let messageUsers: any[] = [];
-      if (userIds.length > 0) {
-        messageUsers = await db
-          .select()
-          .from(users)
-          .where(sql`id = ANY(ARRAY[${sql.join(userIds.map(String))}]::int[])`);
-      }
-
-      const messagesWithUsers = foundMessages.map(message => ({
-        ...message,
-        user: messageUsers.find(u => u.id === message.userId),
-      }));
-
-      const directMessagesWithUsers = foundDirectMessages.map(dm => ({
-        ...dm,
-        fromUser: messageUsers.find(u => u.id === dm.fromUserId),
-        toUser: messageUsers.find(u => u.id === dm.toUserId),
-      }));
-
+      // Transform dates to ISO strings and ensure all fields are properly formatted
       res.json({
         channels: [],
-        messages: messagesWithUsers,
-        directMessages: directMessagesWithUsers,
+        messages: foundMessages.map(msg => ({
+          ...msg,
+          createdAt: msg.createdAt?.toISOString() ?? new Date().toISOString()
+        })),
+        directMessages: foundDirectMessages.map(dm => ({
+          ...dm,
+          createdAt: dm.createdAt?.toISOString() ?? new Date().toISOString()
+        }))
       });
     } catch (error) {
       console.error('Search error:', error);
@@ -310,7 +287,7 @@ export function registerRoutes(app: Express): Server {
         error: error instanceof Error ? error.message : 'Unknown error',
         channels: [],
         messages: [],
-        directMessages: [],
+        directMessages: []
       });
     }
   });
