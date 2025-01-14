@@ -39,7 +39,7 @@ export default function ChatPage() {
             {selectedChannelId ? (
               <>
                 {threadMessage ? (
-                  <>
+                  <div className="flex-1 flex flex-col">
                     <div className="px-4 py-2 border-b bg-accent/20">
                       <button 
                         onClick={() => setThreadMessage(undefined)}
@@ -53,17 +53,22 @@ export default function ChatPage() {
                       messages={[threadMessage, ...threadMessages]}
                       onThreadClick={undefined}
                     />
-                  </>
+                    <MessageInput 
+                      channelId={selectedChannelId} 
+                      threadParentId={threadMessage?.id}
+                    />
+                  </div>
                 ) : (
-                  <MessageList
-                    messages={channelMessages}
-                    onThreadClick={setThreadMessage}
-                  />
+                  <>
+                    <MessageList
+                      messages={channelMessages}
+                      onThreadClick={setThreadMessage}
+                    />
+                    <MessageInput 
+                      channelId={selectedChannelId}
+                    />
+                  </>
                 )}
-                <MessageInput 
-                  channelId={selectedChannelId} 
-                  threadParentId={threadMessage?.id}
-                />
               </>
             ) : (
               <div className="flex-1 flex items-center justify-center text-muted-foreground">

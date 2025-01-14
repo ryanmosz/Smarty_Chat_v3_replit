@@ -47,6 +47,29 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Thread messages route
+  app.get("/api/messages/:messageId/thread", async (req, res) => {
+    try {
+      const messageId = parseInt(req.params.messageId);
+      if (isNaN(messageId)) {
+        return res.status(400).json({ message: 'Invalid message ID' });
+      }
+
+      const threadMessages = await db.query.messages.findMany({
+        where: eq(messages.threadParentId, messageId),
+        with: {
+          user: true
+        },
+        orderBy: messages.createdAt,
+      });
+
+      res.json(threadMessages);
+    } catch (error) {
+      console.error('Error fetching thread messages:', error);
+      res.status(500).json({ message: 'Failed to fetch thread messages' });
+    }
+  });
+
   app.post("/api/channels", async (req, res) => {
     try {
       const { name, description } = req.body;
