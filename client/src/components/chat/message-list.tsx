@@ -52,10 +52,10 @@ function renderMessageContent(content: string): React.ReactNode {
             href={url}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-blue-500 hover:text-blue-700 inline-flex items-center gap-1"
+            className="inline-flex items-center gap-2 px-2 py-1 my-1 bg-accent/30 hover:bg-accent/50 rounded-md max-w-full overflow-hidden"
           >
-            <img src="/file-icon.svg" alt="File" className="h-4 w-4"/> {/*Replaced FileIcon*/}
-            {text}
+            <img src="/file-icon.svg" alt="File" className="h-4 w-4 shrink-0"/>
+            <span className="truncate">{text}</span>
           </a>
         );
       } else {
