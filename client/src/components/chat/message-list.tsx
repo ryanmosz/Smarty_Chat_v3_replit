@@ -21,7 +21,7 @@ interface MessageListProps {
   highlightedMessageId?: number;
 }
 
-// Helper function to parse and render message content
+// Update the renderMessageContent function to fix file display alignment
 function renderMessageContent(content: string): React.ReactNode {
   try {
     if (!content) return '';
@@ -47,16 +47,21 @@ function renderMessageContent(content: string): React.ReactNode {
       if (url.startsWith('/uploads/')) {
         // It's an uploaded file
         parts.push(
-          <a 
+          <div 
             key={`link-${match.index}`}
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 px-2 py-1 my-1 bg-accent/30 hover:bg-accent/50 rounded-md max-w-full overflow-hidden"
+            className="inline-flex items-center my-1"
           >
-            <img src="/file-icon.svg" alt="File" className="h-4 w-4 shrink-0"/>
-            <span className="truncate">{text}</span>
-          </a>
+            <span className="mr-2">File:</span>
+            <a 
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-2 py-1 bg-accent/30 hover:bg-accent/50 rounded-md max-w-full overflow-hidden"
+            >
+              <img src="/file-icon.svg" alt="File" className="h-4 w-4 shrink-0"/>
+              <span className="truncate">{text}</span>
+            </a>
+          </div>
         );
       } else {
         // Regular link
