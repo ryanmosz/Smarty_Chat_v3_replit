@@ -220,7 +220,7 @@ export function registerRoutes(app: Express): Server {
           fromUser: true,
           toUser: true
         },
-        orderBy: desc(directMessages.createdAt)
+        orderBy: directMessages.createdAt // Changed to ascending order
       });
 
       res.json(userMessages);
@@ -279,7 +279,6 @@ export function registerRoutes(app: Express): Server {
       res.status(500).json({ message: 'Failed to fetch active conversations' });
     }
   });
-
 
 
   app.get("/api/search", async (req, res) => {
