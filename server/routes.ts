@@ -196,6 +196,11 @@ export function registerRoutes(app: Express): Server {
         return res.status(400).json({ message: 'Invalid user ID' });
       }
 
+      // Don't allow self-messaging
+      if (userId === currentUserId) {
+        return res.status(400).json({ message: 'Cannot start a conversation with yourself' });
+      }
+
       // Only fetch messages where both the current user and requested user are participants
       const userMessages = await db.query.directMessages.findMany({
         where: and(
@@ -208,7 +213,8 @@ export function registerRoutes(app: Express): Server {
               eq(directMessages.fromUserId, userId),
               eq(directMessages.toUserId, currentUserId)
             )
-          )
+          ),
+          eq(directMessages.isDeleted, false)
         ),
         with: {
           fromUser: true,
