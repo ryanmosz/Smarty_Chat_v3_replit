@@ -1,6 +1,6 @@
 
 import { PromptTemplate } from '@langchain/core/prompts';
-import { OpenAI } from 'langchain/llms/openai';
+import { OpenAI } from '@langchain/openai';
 import { PostSearchResult } from './embeddings-store';
 
 const promptTemplate = new PromptTemplate({
