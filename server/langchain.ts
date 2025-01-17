@@ -1,5 +1,5 @@
 
-import { PromptTemplate } from 'langchain/prompts';
+import { PromptTemplate } from '@langchain/core/prompts';
 import { OpenAI } from 'langchain/llms/openai';
 import { PostSearchResult } from './embeddings-store';
 
