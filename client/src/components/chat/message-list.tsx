@@ -53,7 +53,6 @@ function renderMessageContent(content: string): React.ReactNode {
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 px-3 py-1.5 my-1 text-blue-500 hover:text-blue-700"
           >
-            <img src="/file-icon.svg" alt="File" className="h-4 w-4 shrink-0"/>
             <span className="underline">{text}</span>
           </a>
         );
@@ -142,7 +141,7 @@ function ReactionList({ reactions }: { reactions: MessageWithUser['reactions'] }
 export function MessageList({ messages, onThreadClick, highlightedMessageId }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const highlightedRef = useRef<HTMLDivElement>(null);
-  const { user } = useUser();
+  const { user: currentUser } = useUser();
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -161,8 +160,11 @@ export function MessageList({ messages, onThreadClick, highlightedMessageId }: M
         {messages.map((message) => {
           if (!message) return null;
 
-          const username = message.user?.username || 'Unknown User';
-          const avatarColor = message.user?.avatarColor || 'hsl(0, 0%, 90%)';
+          // If the message is from the current user but doesn't have user info attached,
+          // use the current user's info
+          const messageUser = message.userId === currentUser?.id ? currentUser : message.user;
+          const username = messageUser?.username || 'Unknown User';
+          const avatarColor = messageUser?.avatarColor || 'hsl(0, 0%, 90%)';
           const userInitials = username.slice(0, 2).toUpperCase();
           const isHighlighted = message.id === highlightedMessageId;
 
