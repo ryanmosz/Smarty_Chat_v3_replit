@@ -132,26 +132,29 @@ export function setupWebSocket(server: Server) {
                   temperature: 0.7
                 });
 
-                // Create AI response as a thread
+                // Create AI response as a message
                 const [aiResponse] = await db
                   .insert(messages)
                   .values({
                     content: response.response,
                     channelId,
-                    threadParentId: newMessage.id,
-                    userId: null // Null userId indicates system/AI message
+                    userId: null, // Null userId indicates system/AI message
                   })
                   .returning();
 
+                const messageWithAIUser = {
+                  ...aiResponse,
+                  user: {
+                    id: -1, // Special ID for AI
+                    username: 'GPT-says',
+                    avatarColor: 'hsl(280, 70%, 50%)',
+                    status: 'online'
+                  }
+                };
+
                 broadcast({ 
                   type: 'message', 
-                  payload: {
-                    ...aiResponse,
-                    user: {
-                      username: 'AI Assistant',
-                      avatarColor: 'hsl(280, 70%, 50%)'
-                    }
-                  }
+                  payload: messageWithAIUser
                 });
               }
 
