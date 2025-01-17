@@ -281,7 +281,35 @@ export function registerRoutes(app: Express): Server {
   });
 
 
-  app.get("/api/user-posts/search", async (req, res) => {
+  app.post("/api/contextual-search", async (req, res) => {
+  try {
+    const { userId, query, options } = req.body;
+    
+    if (!userId || !query) {
+      return res.status(400).json({ message: 'Missing required parameters' });
+    }
+
+    // First get relevant posts using existing search
+    const searchResults = await queryUserPosts(userId, query);
+    
+    // Generate contextual response using LangChain
+    const response = await generateContextualResponse(searchResults, query, options);
+    
+    res.json({
+      contextualResponse: response.response,
+      relevantPosts: searchResults,
+      usedContext: response.usedContext
+    });
+  } catch (error) {
+    console.error('Contextual search error:', error);
+    res.status(500).json({
+      message: 'Failed to perform contextual search',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+app.get("/api/user-posts/search", async (req, res) => {
   try {
     const { userId, query, limit } = req.query;
     if (!userId || !query || typeof userId !== 'string' || typeof query !== 'string') {
