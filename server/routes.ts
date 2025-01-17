@@ -40,6 +40,27 @@ export function registerRoutes(app: Express): Server {
   const wss = setupWebSocket(httpServer);
   app.set('wss', wss);
 
+  // Ensure askGPT channel exists
+  (async () => {
+    try {
+      const [existingChannel] = await db
+        .select()
+        .from(channels)
+        .where(eq(channels.name, 'askGPT'))
+        .limit(1);
+
+      if (!existingChannel) {
+        await db.insert(channels).values({
+          name: 'askGPT',
+          description: 'Ask questions about your message history'
+        });
+        console.log('Created #askGPT channel');
+      }
+    } catch (error) {
+      console.error('Error ensuring askGPT channel:', error);
+    }
+  })();
+
   // Serve uploaded files
   app.use('/uploads', express.static(uploadsDir));
 

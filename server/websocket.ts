@@ -104,6 +104,7 @@ export function setupWebSocket(server: Server) {
                 limit: 1
               });
 
+              // Store message
               const [newMessage] = await db
                 .insert(messages)
                 .values({ 
@@ -113,6 +114,13 @@ export function setupWebSocket(server: Server) {
                   userId 
                 })
                 .returning();
+
+              // Store embedding for the message
+              await storeEmbedding(
+                userId.toString(),
+                newMessage.id.toString(),
+                content
+              );
 
               // Handle askGPT channel specially
               if (channel?.name === 'askGPT' && !threadParentId) {
