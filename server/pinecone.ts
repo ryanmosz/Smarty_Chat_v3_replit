@@ -17,8 +17,8 @@ const createIndexIfNotExists = async () => {
         metric: 'cosine',
         spec: {
           serverless: {
-            cloud: 'aws',
-            region: 'us-west-2'
+            cloud: 'gcp',
+            region: 'gcp-starter'
           }
         }
       });
