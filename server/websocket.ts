@@ -142,10 +142,18 @@ export function setupWebSocket(server: Server) {
                   })
                   .returning();
 
-                const messageWithAIUser = {
-                  ...aiResponse,
+                const [messageWithAIUser] = await db.query.messages.findMany({
+                  where: eq(messages.id, aiResponse.id),
+                  with: {
+                    user: true
+                  },
+                  limit: 1
+                });
+
+                const messageWithGPTUser = {
+                  ...messageWithAIUser,
                   user: {
-                    id: -1, // Special ID for AI
+                    id: -1,
                     username: 'GPT-says',
                     avatarColor: 'hsl(280, 70%, 50%)',
                     status: 'online'
@@ -154,7 +162,7 @@ export function setupWebSocket(server: Server) {
 
                 broadcast({ 
                   type: 'message', 
-                  payload: messageWithAIUser
+                  payload: messageWithGPTUser
                 });
               }
 
