@@ -30,6 +30,47 @@ export const storeEmbedding = async (userId: string, postId: string, content: st
   }
 };
 
+export interface PostSearchResult {
+  content: string;
+  channelId?: number;
+  messageId: string;
+  score: number;
+  createdAt: string;
+}
+
+export const queryUserPosts = async (
+  userId: string,
+  query: string,
+  limit = 5
+): Promise<PostSearchResult[]> => {
+  try {
+    const queryEmbedding = await embedText(query);
+    const index = pinecone.index('smallindex');
+    
+    const results = await index.query({
+      vector: queryEmbedding,
+      topK: limit,
+      includeMetadata: true,
+      filter: { userId: { $eq: userId } }
+    });
+
+    if (!results.matches?.length) {
+      return [];
+    }
+
+    return results.matches.map(match => ({
+      content: match.metadata.content as string,
+      channelId: match.metadata.channelId as number,
+      messageId: match.metadata.messageId as string,
+      score: match.score,
+      createdAt: match.metadata.createdAt as string
+    }));
+  } catch (error) {
+    console.error('Failed to query user posts:', error);
+    throw new Error(`Failed to query user posts: ${(error as Error).message}`);
+  }
+};
+
 export const queryEmbeddings = async (queryEmbedding: number[], limit = 5) => {
   try {
     const index = pinecone.index('smallindex');

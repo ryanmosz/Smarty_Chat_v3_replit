@@ -281,7 +281,30 @@ export function registerRoutes(app: Express): Server {
   });
 
 
-  app.get("/api/search", async (req, res) => {
+  app.get("/api/user-posts/search", async (req, res) => {
+  try {
+    const { userId, query, limit } = req.query;
+    if (!userId || !query || typeof userId !== 'string' || typeof query !== 'string') {
+      return res.status(400).json({ message: 'Missing required parameters' });
+    }
+
+    const results = await queryUserPosts(
+      userId,
+      query,
+      limit ? parseInt(limit as string) : undefined
+    );
+
+    res.json(results);
+  } catch (error) {
+    console.error('Search error:', error);
+    res.status(500).json({
+      message: 'Failed to search user posts',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+app.get("/api/search", async (req, res) => {
     try {
       const query = req.query.q as string;
       if (!query?.trim()) {
