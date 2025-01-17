@@ -1,5 +1,18 @@
 REQUIREMENTS
 
+WEEK 2
+
+feature add:
+
+A RAG (Retrieval-Augmented Generation) system that can interact with the channel portion of my Slack clone workspace.
+
+bugs:
+
+currently the tool chain is not set up correctly, so the user does not recieve any answer to their query on the #askGPT channel
+
+--
+
+WEEK 1
 1: Authentication - DONE
 
 2: Real-time messaging - DONE
