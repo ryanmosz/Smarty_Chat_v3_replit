@@ -1,4 +1,3 @@
-
 import { embedText } from './embeddings';
 import pinecone from './pinecone';
 
@@ -12,7 +11,7 @@ export const storeEmbedding = async (userId: string, postId: string, content: st
   try {
     const embedding = await embedText(content);
     const index = pinecone.index('smallindex');
-    
+
     await index.upsert([{
       id: `${userId}-${postId}`,
       values: embedding,
@@ -46,7 +45,7 @@ export const queryUserPosts = async (
   try {
     const queryEmbedding = await embedText(query);
     const index = pinecone.index('smallindex');
-    
+
     const results = await index.query({
       vector: queryEmbedding,
       topK: limit,
@@ -79,7 +78,7 @@ export const queryEmbeddings = async (queryEmbedding: number[], limit = 5) => {
       topK: limit,
       includeMetadata: true
     });
-    
+
     return results.matches;
   } catch (error) {
     console.error('Failed to query embeddings:', error);
