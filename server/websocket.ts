@@ -4,7 +4,8 @@ import { db } from '@db';
 import { messages, directMessages, users, channels } from '@db/schema';
 import { parse as parseUrl } from 'url';
 import { eq } from 'drizzle-orm';
-import { storeEmbedding } from './embeddings-store';
+import { storeEmbedding, queryUserPosts } from './embeddings-store';
+import { generateContextualResponse } from './langchain';
 
 type WebSocketMessage = {
   type: 'message' | 'typing' | 'channel_created' | 'channel_deleted' | 'message_deleted' | 
@@ -126,44 +127,46 @@ export function setupWebSocket(server: Server) {
 
               // Handle askGPT channel specially
               if (channel?.name === 'askGPT' && !threadParentId) {
-                const userPosts = await queryUserPosts(userId.toString(), content);
-                const response = await generateContextualResponse(userPosts, content, {
-                  model: 'gpt-3.5-turbo',
-                  temperature: 0.7
-                });
+                try {
+                  const userPosts = await queryUserPosts(userId.toString(), content);
+                  const response = await generateContextualResponse(userPosts, content, {
+                    model: 'gpt-3.5-turbo',
+                    temperature: 0.7
+                  });
 
-                // Create AI response as a message
-                const [aiResponse] = await db
-                  .insert(messages)
-                  .values({
-                    content: response.response,
-                    channelId,
-                    userId: null, // Null userId indicates system/AI message
-                  })
-                  .returning();
+                  // Create AI response as a message
+                  const [aiResponse] = await db
+                    .insert(messages)
+                    .values({
+                      content: response.response,
+                      channelId,
+                      userId: null // Null userId indicates system/AI message
+                    })
+                    .returning();
 
-                const [messageWithAIUser] = await db.query.messages.findMany({
-                  where: eq(messages.id, aiResponse.id),
-                  with: {
-                    user: true
-                  },
-                  limit: 1
-                });
+                  // Construct the GPT message with user info directly
+                  const gptMessage = {
+                    ...aiResponse,
+                    user: {
+                      id: -1,
+                      username: 'GPT-says',
+                      avatarColor: 'hsl(280, 70%, 50%)',
+                      status: 'online'
+                    },
+                    channel: channel
+                  };
 
-                const messageWithGPTUser = {
-                  ...messageWithAIUser,
-                  user: {
-                    id: -1,
-                    username: 'GPT-says',
-                    avatarColor: 'hsl(280, 70%, 50%)',
-                    status: 'online'
-                  }
-                };
-
-                broadcast({ 
-                  type: 'message', 
-                  payload: messageWithGPTUser
-                });
+                  broadcast({ 
+                    type: 'message', 
+                    payload: gptMessage
+                  });
+                } catch (error) {
+                  console.error('Error generating GPT response:', error);
+                  ws.send(JSON.stringify({ 
+                    type: 'error', 
+                    payload: 'Failed to generate AI response' 
+                  }));
+                }
               }
 
               const [messageWithUser] = await db.query.messages.findMany({
