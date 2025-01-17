@@ -9,7 +9,8 @@ const pinecone = new Pinecone({
 const createIndexIfNotExists = async () => {
   try {
     const indexList = await pinecone.listIndexes();
-    if (!indexList.includes('smallindex')) {
+    const exists = indexList.indexes?.some(index => index.name === 'smallindex');
+    if (!exists) {
       await pinecone.createIndex({
         name: 'smallindex',
         dimension: 1536,
