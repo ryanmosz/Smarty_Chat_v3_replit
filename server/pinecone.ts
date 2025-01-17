@@ -14,7 +14,13 @@ const createIndexIfNotExists = async () => {
       await pinecone.createIndex({
         name: 'smallindex',
         dimension: 1536,
-        metric: 'cosine'
+        metric: 'cosine',
+        spec: {
+          serverless: {
+            cloud: 'aws',
+            region: 'us-west-2'
+          }
+        }
       });
       console.log('Created new Pinecone index: smallindex');
     }
