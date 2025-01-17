@@ -4,6 +4,7 @@ import { db } from '@db';
 import { messages, directMessages, users, channels } from '@db/schema';
 import { parse as parseUrl } from 'url';
 import { eq } from 'drizzle-orm';
+import { storeEmbedding } from './embeddings-store';
 
 type WebSocketMessage = {
   type: 'message' | 'typing' | 'channel_created' | 'channel_deleted' | 'message_deleted' | 
