@@ -1,7 +1,7 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { Server } from 'http';
 import { db } from '@db';
-import { messages, directMessages, users } from '@db/schema';
+import { messages, directMessages, users, channels } from '@db/schema';
 import { parse as parseUrl } from 'url';
 import { eq } from 'drizzle-orm';
 
@@ -114,6 +114,15 @@ export function setupWebSocket(server: Server) {
                   userId 
                 })
                 .returning();
+
+              // Fetch the complete message with user data
+              const [messageWithUser] = await db.query.messages.findMany({
+                where: eq(messages.id, newMessage.id),
+                with: {
+                  user: true
+                },
+                limit: 1
+              });
 
               // Store embedding for the message
               await storeEmbedding(
