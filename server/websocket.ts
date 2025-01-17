@@ -99,6 +99,11 @@ export function setupWebSocket(server: Server) {
             const { content, channelId, threadParentId, userId } = message.payload;
 
             try {
+              const [channel] = await db.query.channels.findMany({
+                where: eq(channels.id, channelId),
+                limit: 1
+              });
+
               const [newMessage] = await db
                 .insert(messages)
                 .values({ 
@@ -108,6 +113,37 @@ export function setupWebSocket(server: Server) {
                   userId 
                 })
                 .returning();
+
+              // Handle askGPT channel specially
+              if (channel?.name === 'askGPT' && !threadParentId) {
+                const userPosts = await queryUserPosts(userId.toString(), content);
+                const response = await generateContextualResponse(userPosts, content, {
+                  model: 'gpt-3.5-turbo',
+                  temperature: 0.7
+                });
+
+                // Create AI response as a thread
+                const [aiResponse] = await db
+                  .insert(messages)
+                  .values({
+                    content: response.response,
+                    channelId,
+                    threadParentId: newMessage.id,
+                    userId: null // Null userId indicates system/AI message
+                  })
+                  .returning();
+
+                broadcast({ 
+                  type: 'message', 
+                  payload: {
+                    ...aiResponse,
+                    user: {
+                      username: 'AI Assistant',
+                      avatarColor: 'hsl(280, 70%, 50%)'
+                    }
+                  }
+                });
+              }
 
               const [messageWithUser] = await db.query.messages.findMany({
                 where: eq(messages.id, newMessage.id),
