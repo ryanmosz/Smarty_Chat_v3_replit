@@ -116,14 +116,6 @@ export function setupWebSocket(server: Server) {
                 .returning();
 
               // Fetch the complete message with user data
-              const [messageWithUser] = await db.query.messages.findMany({
-                where: eq(messages.id, newMessage.id),
-                with: {
-                  user: true
-                },
-                limit: 1
-              });
-
               // Store embedding for the message
               await storeEmbedding(
                 userId.toString(),
